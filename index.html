@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulador Rover Marciano</title>
+<style>
+  /* ------------------------------------------------------------------ */
+  /*  Layout general: canvas 3D a pantalla completa + HUD superpuesto    */
+  /* ------------------------------------------------------------------ */
+  :root {
+    --panel: rgba(20, 12, 8, 0.72);
+    --border: rgba(255, 170, 110, 0.35);
+    --accent: #ffb070;
+    --ok: #7ee787;
+    --warn: #ff6b57;
+    --text: #f5e6d8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0d0806;
+    font-family: "Segoe UI", system-ui, sans-serif; color: var(--text); }
+  #scene { position: fixed; inset: 0; display: block; }
+
+  .panel { position: fixed; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px; backdrop-filter: blur(6px);
+    font-size: 13px; line-height: 1.5; }
+  .panel h1 { font-size: 15px; margin: 0 0 6px; color: var(--accent); letter-spacing: .5px; }
+  .panel h2 { font-size: 11px; margin: 8px 0 4px; text-transform: uppercase;
+    letter-spacing: 1px; opacity: .7; }
+
+  /* Telemetría (arriba izquierda) */
+  #telemetry { top: 14px; left: 14px; min-width: 230px; }
+  #telemetry table { border-collapse: collapse; width: 100%; }
+  #telemetry td { padding: 1px 0; }
+  #telemetry td:last-child { text-align: right; font-family: Consolas, monospace; color: #fff; }
+  #battery-bar { height: 8px; background: rgba(255,255,255,.12); border-radius: 4px; overflow: hidden; margin-top: 4px; }
+  #battery-fill { height: 100%; width: 100%; background: var(--ok); transition: width .3s, background .3s; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px;
+    font-weight: 600; background: rgba(126,231,135,.18); color: var(--ok); }
+  .badge.alert { background: rgba(255,107,87,.2); color: var(--warn); }
+  #conn { font-size: 11px; opacity: .8; margin-top: 6px; }
+  #conn.off { color: var(--warn); opacity: 1; }
+
+  /* Controles (abajo izquierda) */
+  #controls { bottom: 14px; left: 14px; }
+  .dpad { display: grid; grid-template-columns: repeat(3, 44px); gap: 6px; margin: 6px 0; }
+  .dpad button, .row button { background: rgba(255,176,112,.14); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; height: 40px; cursor: pointer;
+    font-size: 13px; font-weight: 600; transition: background .15s; }
+  .dpad button:hover, .row button:hover { background: rgba(255,176,112,.35); }
+  .dpad button:active, .row button:active { background: var(--accent); color: #2a1408; }
+  .row { display: flex; gap: 6px; margin-top: 6px; }
+  .row button { flex: 1; padding: 0 10px; }
+  .hint { font-size: 11px; opacity: .65; margin-top: 8px; }
+  kbd { background: rgba(255,255,255,.12); padding: 0 5px; border-radius: 4px; font-family: Consolas, monospace; }
+
+  /* HazCam (abajo derecha) */
+  #hazcam-panel { bottom: 14px; right: 14px; padding: 8px; }
+  #hazcam-panel h2 { margin: 0 0 6px; display: flex; justify-content: space-between; align-items: center; }
+  #hazcam { display: block; width: 320px; height: 240px; border-radius: 6px;
+    border: 1px solid var(--border); background: #000; image-rendering: auto; }
+  #hazcam-panel .rec { color: var(--warn); font-size: 10px; }
+</style>
+</head>
+<body>
+
+<canvas id="scene"></canvas>
+
+<!-- ---------------------------------------------------------------- -->
+<!--  HUD                                                             -->
+<!-- ---------------------------------------------------------------- -->
+<div id="telemetry" class="panel">
+  <h2>Telemetría</h2>
+  <table>
+    <tr><td>Posición X</td><td id="t-x">0.00 m</td></tr>
+    <tr><td>Posición Y</td><td id="t-y">0.00 m</td></tr>
+    <tr><td>Rumbo</td><td id="t-heading">0°</td></tr>
+    <tr><td>Velocidad</td><td id="t-speed">0.00 m/s</td></tr>
+    <tr><td>Odómetro</td><td id="t-odo">0.00 m</td></tr>
+    <tr><td>Obstáculo</td><td><span id="t-obstacle" class="badge">libre</span></td></tr>
+  </table>
+  <h2>Batería <span id="t-battery" style="float:right">100%</span></h2>
+  <div id="battery-bar"><div id="battery-fill"></div></div>
+  <div id="conn">● conectando…</div>
+</div>
+
+<div id="controls" class="panel">
+  <h2>Control manual</h2>
+  <div class="dpad">
+    <span></span><button data-action="forward" data-value="1">▲</button><span></span>
+    <button data-action="turn_left" data-value="15">◀</button>
+    <button data-action="stop">■</button>
+    <button data-action="turn_right" data-value="15">▶</button>
+    <span></span><button data-action="backward" data-value="1">▼</button><span></span>
+  </div>
+  <div class="row">
+    <button id="btn-cam">📷 Ver HazCam</button>
+    <button id="btn-reset">↺ Reiniciar</button>
+  </div>
+  <div class="hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> mover · <kbd>Espacio</kbd> parar · <kbd>C</kbd> cámara</div>
+</div>
+
+<div id="hazcam-panel" class="panel">
+  <h2>HazCam frontal <span class="rec">● REC</span></h2>
+  <canvas id="hazcam" width="320" height="240"></canvas>
+</div>
+
+<!-- ---------------------------------------------------------------- -->
+<!--  Three.js vía CDN (ES modules + importmap, sin build)             -->
+<!-- ---------------------------------------------------------------- -->
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+
+<script type="module">
+import * as THREE from "three";
+
+/* ================================================================== */
+/*  Configuración                                                      */
+/* ================================================================== */
+const API = "";                    // Mismo origen que el servidor
+const POLL_MS = 100;               // Frecuencia de lectura de telemetría
+const FRAME_PUSH_MS = 250;         // Frecuencia de subida del frame HazCam
+const HAZ_W = 320, HAZ_H = 240;    // Resolución HazCam
+
+/* ================================================================== */
+/*  Escena, renderer y cámaras                                         */
+/* ================================================================== */
+const canvas = document.getElementById("scene");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+const SKY = 0xd9a066;                          // Cielo marciano (butterscotch)
+scene.background = new THREE.Color(SKY);
+scene.fog = new THREE.Fog(SKY, 18, 80);        // Niebla atmosférica sutil
+
+// Cámara de seguimiento en tercera persona
+const chaseCam = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 300);
+chaseCam.position.set(-8, 5, 0);
+
+// HazCam: se cuelga del mástil del rover, mira hacia +X (frente del rover)
+const hazCam = new THREE.PerspectiveCamera(70, HAZ_W / HAZ_H, 0.1, 150);
+hazCam.rotation.set(0, -Math.PI / 2, 0);       // -Z de la cámara -> +X del rover
+hazCam.rotateX(-0.18);                         // Ligera inclinación hacia el suelo
+
+// Render target donde se dibuja la HazCam para leer sus píxeles
+const hazTarget = new THREE.WebGLRenderTarget(HAZ_W, HAZ_H);
+const hazPixels = new Uint8Array(HAZ_W * HAZ_H * 4);
+const hazCanvas = document.getElementById("hazcam");
+const hazCtx = hazCanvas.getContext("2d");
+const hazImage = hazCtx.createImageData(HAZ_W, HAZ_H);
+
+/* ================================================================== */
+/*  Iluminación                                                        */
+/* ================================================================== */
+scene.add(new THREE.HemisphereLight(0xffd6b0, 0x6b2f16, 0.8));
+const sun = new THREE.DirectionalLight(0xffe0c0, 1.6);
+sun.position.set(30, 40, 20);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = sun.shadow.camera.bottom = -45;
+sun.shadow.camera.right = sun.shadow.camera.top = 45;
+scene.add(sun);
+
+/* ================================================================== */
+/*  Terreno: plano con textura procedural rojiza                       */
+/* ================================================================== */
+function makeGroundTexture() {
+  const c = document.createElement("canvas");
+  c.width = c.height = 512;
+  const g = c.getContext("2d");
+  g.fillStyle = "#b5502a";
+  g.fillRect(0, 0, 512, 512);
+  // Motas de regolito para dar sensación de escala
+  for (let i = 0; i < 9000; i++) {
+    const s = Math.random() * 3 + 0.5;
+    const tone = 140 + Math.random() * 60;
+    g.fillStyle = `rgba(${tone}, ${tone * 0.45 | 0}, ${tone * 0.25 | 0}, ${0.35 + Math.random() * 0.4})`;
+    g.fillRect(Math.random() * 512, Math.random() * 512, s, s);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function buildGround(size) {
+  const tex = makeGroundTexture();
+  tex.repeat.set(size / 8, size / 8);
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(size, size),
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 1, metalness: 0 }));
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // Plano exterior "infinito" para que el horizonte no se corte
+  const outer = new THREE.Mesh(
+    new THREE.PlaneGeometry(size * 8, size * 8),
+    new THREE.MeshStandardMaterial({ color: 0xa8462a, roughness: 1 }));
+  outer.rotation.x = -Math.PI / 2;
+  outer.position.y = -0.02;
+  scene.add(outer);
+
+  // Borde del área navegable
+  const edge = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.PlaneGeometry(size, size)),
+    new THREE.LineBasicMaterial({ color: 0xffb070, transparent: true, opacity: 0.35 }));
+  edge.rotation.x = -Math.PI / 2;
+  edge.position.y = 0.02;
+  scene.add(edge);
+}
+
+/* ================================================================== */
+/*  Rocas / obstáculos (posiciones vienen del backend)                 */
+/* ================================================================== */
+function buildRocks(rocks) {
+  const mat = new THREE.MeshStandardMaterial({ color: 0x5a3a2c, roughness: 0.95, flatShading: true });
+  for (const r of rocks) {
+    const geo = new THREE.DodecahedronGeometry(r.radius, 1);
+    // Deformación de vértices para que no parezcan poliedros perfectos.
+    // Se usa un "ruido" determinista en función de la posición: así los
+    // vértices duplicados que comparten posición se desplazan igual y la
+    // malla no se rompe.
+    const pos = geo.attributes.position;
+    const seed = r.id * 7.13;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      const n = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719 + seed) * 43758.5453;
+      const k = 0.82 + (n - Math.floor(n)) * 0.36;
+      pos.setXYZ(i, x * k, y * k, z * k);
+    }
+    geo.computeVertexNormals();
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.scale.y = r.height / r.radius;
+    mesh.position.set(r.x, r.height * 0.35, -r.y);       // backend Y -> three -Z
+    mesh.rotation.y = Math.random() * Math.PI * 2;
+    mesh.castShadow = mesh.receiveShadow = true;
+    scene.add(mesh);
+  }
+}
+
+/* ================================================================== */
+/*  Rover: cuerpo + 6 ruedas + mástil con cámara (mira hacia +X)       */
+/* ================================================================== */
+const rover = new THREE.Group();
+const wheels = [];
+
+function buildRover() {
+  const bodyMat  = new THREE.MeshStandardMaterial({ color: 0xd8d8d8, roughness: 0.6, metalness: 0.3 });
+  const darkMat  = new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.9 });
+  const panelMat = new THREE.MeshStandardMaterial({ color: 0x1a2a5a, roughness: 0.3, metalness: 0.6 });
+  const goldMat  = new THREE.MeshStandardMaterial({ color: 0xc9a13b, roughness: 0.4, metalness: 0.7 });
+
+  const add = (mesh, parent = rover) => { mesh.castShadow = mesh.receiveShadow = true; parent.add(mesh); return mesh; };
+
+  // Cuerpo principal
+  const body = add(new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.55, 1.4), bodyMat));
+  body.position.y = 0.85;
+
+  // Panel solar sobre el cuerpo
+  const panel = add(new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.05, 1.7), panelMat));
+  panel.position.y = 1.15;
+
+  // Ruedas: 3 por lado (rocker-bogie simplificado)
+  const wheelGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.28, 18);
+  const treadGeo = new THREE.TorusGeometry(0.3, 0.05, 6, 18);
+  for (const x of [-0.85, 0, 0.85]) {
+    for (const z of [-0.9, 0.9]) {
+      const w = new THREE.Group();
+      const disk = new THREE.Mesh(wheelGeo, darkMat);
+      disk.rotation.x = Math.PI / 2;                   // Eje de giro paralelo a Z
+      const tread = new THREE.Mesh(treadGeo, goldMat);
+      w.add(disk, tread);
+      w.position.set(x, 0.32, z);
+      w.traverse(o => { if (o.isMesh) o.castShadow = true; });
+      rover.add(w);
+      wheels.push(w);
+
+      // Brazo de suspensión hacia el cuerpo
+      const arm = add(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.5, 0.08), bodyMat));
+      arm.position.set(x, 0.55, z * 0.85);
+      arm.rotation.x = z > 0 ? -0.35 : 0.35;
+    }
+    // Eje transversal
+    const axle = add(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.8), bodyMat));
+    axle.rotation.x = Math.PI / 2;
+    axle.position.set(x, 0.32, 0);
+  }
+
+  // Mástil frontal con cabeza de cámara
+  const mast = add(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.2), bodyMat));
+  mast.position.set(0.8, 1.75, 0);
+  const head = add(new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.25, 0.5), bodyMat));
+  head.position.set(0.8, 2.4, 0);
+  for (const z of [-0.14, 0.14]) {                     // Dos "ojos" (cámaras estéreo)
+    const lens = add(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.08, 12), darkMat));
+    lens.rotation.z = Math.PI / 2;
+    lens.position.set(1.05, 2.4, z);
+  }
+  // La HazCam se sitúa justo delante de los lentes
+  hazCam.position.set(1.15, 2.4, 0);
+  rover.add(hazCam);
+
+  // Antena de alta ganancia
+  const dish = add(new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.12, 16, 1, true), goldMat));
+  dish.position.set(-0.7, 1.45, -0.4);
+  dish.rotation.x = Math.PI;
+  const dishPole = add(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.35), bodyMat));
+  dishPole.position.set(-0.7, 1.3, -0.4);
+
+  // Luz frontal (ayuda a que la HazCam vea el terreno cercano)
+  const headlight = new THREE.PointLight(0xffffff, 6, 8);
+  headlight.position.set(1.3, 1.0, 0);
+  rover.add(headlight);
+
+  scene.add(rover);
+}
+
+/* ================================================================== */
+/*  Estado del rover (objetivo del backend vs. valor interpolado)      */
+/* ================================================================== */
+const target = { x: 0, y: 0, heading: 90 };           // Último valor del backend
+const smooth = { x: 0, y: 0, heading: 90 };           // Valor interpolado en pantalla
+let camMode = "chase";                                 // "chase" | "hazcam"
+let lastTelemetry = null;
+
+// Diferencia angular más corta (grados) para interpolar rumbos sin dar vueltas
+function shortestDelta(a, b) {
+  let d = (b - a) % 360;
+  if (d > 180) d -= 360;
+  if (d < -180) d += 360;
+  return d;
+}
+
+/* ================================================================== */
+/*  Comunicación con el backend                                        */
+/* ================================================================== */
+const connEl = document.getElementById("conn");
+
+async function pollTelemetry() {
+  try {
+    const t = await (await fetch(`${API}/api/telemetry`)).json();
+    target.x = t.x; target.y = t.y; target.heading = t.heading;
+    lastTelemetry = t;
+    updateHud(t);
+    connEl.textContent = "● conectado a /api/telemetry";
+    connEl.classList.remove("off");
+  } catch {
+    connEl.textContent = "● sin conexión con el servidor";
+    connEl.classList.add("off");
+  }
+}
+
+async function sendCommand(action, value = 1) {
+  try {
+    await fetch(`${API}/api/control`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, value: Number(value) }),
+    });
+  } catch { /* la telemetría marcará la desconexión */ }
+}
+
+// Sube el frame de la HazCam para que /api/camera devuelva la vista real
+async function pushFrame() {
+  try {
+    const dataUrl = hazCanvas.toDataURL("image/jpeg", 0.7);
+    await fetch(`${API}/api/camera/frame`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image_base64: dataUrl, format: "jpeg" }),
+    });
+  } catch { /* silencioso */ }
+}
+
+/* ================================================================== */
+/*  HUD                                                                */
+/* ================================================================== */
+const $ = id => document.getElementById(id);
+function updateHud(t) {
+  $("t-x").textContent = `${t.x.toFixed(2)} m`;
+  $("t-y").textContent = `${t.y.toFixed(2)} m`;
+  $("t-heading").textContent = `${t.heading.toFixed(0)}°`;
+  $("t-speed").textContent = `${t.speed.toFixed(2)} m/s`;
+  $("t-odo").textContent = `${t.odometer.toFixed(2)} m`;
+  $("t-battery").textContent = `${t.battery.toFixed(0)}%`;
+  const fill = $("battery-fill");
+  fill.style.width = `${t.battery}%`;
+  fill.style.background = t.battery > 30 ? "var(--ok)" : "var(--warn)";
+  const ob = $("t-obstacle");
+  if (t.obstacle_ahead) {
+    ob.textContent = t.obstacle_distance != null ? `⚠ ${t.obstacle_distance.toFixed(1)} m` : "⚠ cerca";
+    ob.classList.add("alert");
+  } else {
+    ob.textContent = t.blocked ? "bloqueado" : "libre";
+    ob.classList.toggle("alert", t.blocked);
+  }
+}
+
+// Botones del D-pad
+document.querySelectorAll("[data-action]").forEach(b =>
+  b.addEventListener("click", () => sendCommand(b.dataset.action, b.dataset.value ?? 0)));
+$("btn-reset").addEventListener("click", () => fetch(`${API}/api/reset`, { method: "POST" }));
+$("btn-cam").addEventListener("click", toggleCamera);
+
+function toggleCamera() {
+  camMode = camMode === "chase" ? "hazcam" : "chase";
+  $("btn-cam").textContent = camMode === "chase" ? "📷 Ver HazCam" : "🛰 Vista externa";
+  $("hazcam-panel").style.display = camMode === "chase" ? "" : "none";
+}
+
+// Teclado: WASD / flechas / espacio / C
+const KEYS = {
+  KeyW: ["forward", 0.5], ArrowUp: ["forward", 0.5],
+  KeyS: ["backward", 0.5], ArrowDown: ["backward", 0.5],
+  KeyA: ["turn_left", 10], ArrowLeft: ["turn_left", 10],
+  KeyD: ["turn_right", 10], ArrowRight: ["turn_right", 10],
+  Space: ["stop", 0],
+};
+const held = new Set();
+addEventListener("keydown", e => {
+  if (e.code === "KeyC") return toggleCamera();
+  if (KEYS[e.code]) { e.preventDefault(); held.add(e.code); }
+});
+addEventListener("keyup", e => held.delete(e.code));
+// Mientras se mantiene una tecla, se envían comandos pequeños de forma continua
+setInterval(() => { for (const k of held) sendCommand(...KEYS[k]); }, 120);
+
+/* ================================================================== */
+/*  Render loop                                                        */
+/* ================================================================== */
+const clock = new THREE.Clock();
+const camTarget = new THREE.Vector3();
+const camPos = new THREE.Vector3();
+
+function setHazAspect(aspect) {
+  if (hazCam.aspect !== aspect) { hazCam.aspect = aspect; hazCam.updateProjectionMatrix(); }
+}
+
+function renderHazCam() {
+  setHazAspect(HAZ_W / HAZ_H);
+  renderer.setRenderTarget(hazTarget);
+  renderer.render(scene, hazCam);
+  renderer.readRenderTargetPixels(hazTarget, 0, 0, HAZ_W, HAZ_H, hazPixels);
+  renderer.setRenderTarget(null);
+  // WebGL entrega las filas de abajo hacia arriba: invertimos verticalmente
+  const out = hazImage.data, row = HAZ_W * 4;
+  for (let y = 0; y < HAZ_H; y++) {
+    out.set(hazPixels.subarray((HAZ_H - 1 - y) * row, (HAZ_H - y) * row), y * row);
+  }
+  hazCtx.putImageData(hazImage, 0, 0);
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.1);
+
+  // Interpolación suave hacia el estado del backend
+  const k = 1 - Math.pow(0.001, dt);                  // ~ suavizado exponencial
+  const prevX = smooth.x, prevY = smooth.y;
+  smooth.x += (target.x - smooth.x) * k;
+  smooth.y += (target.y - smooth.y) * k;
+  smooth.heading += shortestDelta(smooth.heading, target.heading) * k;
+
+  // backend (x, y, heading) -> three (x, 0, -y), rotación sobre Y
+  rover.position.set(smooth.x, 0, -smooth.y);
+  rover.rotation.y = THREE.MathUtils.degToRad(smooth.heading);
+
+  // Giro de ruedas proporcional a la distancia recorrida (radio 0.32 m)
+  const dist = Math.hypot(smooth.x - prevX, smooth.y - prevY);
+  const forwardDir = new THREE.Vector2(Math.cos(rover.rotation.y), Math.sin(rover.rotation.y));
+  const sign = Math.sign(forwardDir.dot(new THREE.Vector2(smooth.x - prevX, smooth.y - prevY))) || 1;
+  for (const w of wheels) w.rotation.z -= sign * dist / 0.32;
+
+  // Cámara de seguimiento: detrás y arriba del rover, en su marco local
+  camTarget.set(-8, 4.5, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), rover.rotation.y).add(rover.position);
+  camPos.copy(chaseCam.position).lerp(camTarget, 1 - Math.pow(0.02, dt));
+  chaseCam.position.copy(camPos);
+  chaseCam.lookAt(rover.position.x, 1.2, rover.position.z);
+
+  // HazCam a baja resolución para la miniatura (PiP)
+  renderHazCam();
+
+  // Vista principal
+  if (camMode === "chase") {
+    renderer.render(scene, chaseCam);
+  } else {
+    setHazAspect(innerWidth / innerHeight);
+    renderer.render(scene, hazCam);
+  }
+}
+
+addEventListener("resize", () => {
+  renderer.setSize(innerWidth, innerHeight);
+  chaseCam.aspect = innerWidth / innerHeight;
+  chaseCam.updateProjectionMatrix();
+});
+
+/* ================================================================== */
+/*  Arranque                                                           */
+/* ================================================================== */
+async function init() {
+  let world = { terrain_size: 60, rocks: [] };
+  try { world = await (await fetch(`${API}/api/world`)).json(); }
+  catch { connEl.textContent = "● no se pudo cargar /api/world"; connEl.classList.add("off"); }
+
+  buildGround(world.terrain_size);
+  buildRocks(world.rocks);
+  buildRover();
+
+  await pollTelemetry();
+  smooth.x = target.x; smooth.y = target.y; smooth.heading = target.heading;
+  setInterval(pollTelemetry, POLL_MS);
+
+  // Subida periódica del frame HazCam al backend. Va en un setInterval
+  // (no en el render loop) para que siga funcionando aunque la pestaña
+  // esté en segundo plano y requestAnimationFrame quede pausado.
+  setInterval(() => { renderHazCam(); pushFrame(); }, FRAME_PUSH_MS);
+
+  animate();
+}
+init();
+</script>
+</body>
+</html>

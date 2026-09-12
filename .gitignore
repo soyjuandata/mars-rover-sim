@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+hazcam.jpg
+hazcam.png
+.DS_Store
