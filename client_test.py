@@ -26,3 +26,4 @@ cam = requests.get(f"{API}/camera").json()
 ext = "jpg" if "jpeg" in cam["mime"] else "png"
 open(f"hazcam.{ext}", "wb").write(base64.b64decode(cam["image_base64"]))
 print(f"Foto guardada en hazcam.{ext} (origen: {cam['source']})")
+print("terminamos")
