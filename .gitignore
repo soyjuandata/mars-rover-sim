@@ -5,3 +5,8 @@ venv/
 hazcam.jpg
 hazcam.png
 .DS_Store
+
+presentaciones/
+
+# Notas de handoff entre sesiones (privadas, no van al repo publico)
+.handoff/
