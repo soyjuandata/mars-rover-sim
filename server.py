@@ -62,7 +62,9 @@ ROVER_RADIUS = 1.0           # Radio de colisión del rover (m)
 PHYSICS_STEP = 0.05          # Resolución del barrido de colisión (m)
 MAX_MOVE = 20.0              # Máximo avance por comando (m)
 MAX_TURN = 360.0             # Máximo giro por comando (grados)
-MAX_SLOPE_DEG = 25.0         # Pendiente máxima que el rover puede subir/bajar
+MAX_SLOPE_DEG = 25.0         # Pendiente peligrosa: el sensor avisa (no bloquea)
+TIP_PITCH_DEG = 35.0         # Cabeceo a partir del cual el rover vuelca
+TIP_ROLL_DEG = 30.0          # Alabeo a partir del cual el rover vuelca
 WHEELBASE = 2.2              # Distancia entre ruedas delanteras y traseras (m)
 TRACK_WIDTH = 1.8            # Distancia entre ruedas izquierda y derecha (m)
 
@@ -281,26 +283,28 @@ class Rover:
         self.battery = 100.0
         self.odometer = 0.0
         self.blocked = False
+        self.overturned = False    # Volcado: no acepta más comandos hasta reset
         self.hazard: Optional[str] = None
         self._last_cmd_time = time.time()
 
     # ------------------------------------------------------------------ #
     @staticmethod
     def _hazard_at(x: float, y: float) -> Optional[str]:
-        """Qué impide al rover estar en (x, y): 'edge', 'rock', 'slope' o None."""
+        """Qué impide al rover estar en (x, y): 'edge', 'rock' o None.
+        Las pendientes no bloquean: si son demasiado fuertes el rover vuelca."""
         if abs(x) > HALF - ROVER_RADIUS or abs(y) > HALF - ROVER_RADIUS:
             return "edge"
         if any(math.hypot(x - r.x, y - r.y) < r.radius + ROVER_RADIUS
                for r in WORLD.rocks_near(x, y)):
             return "rock"
-        if WORLD.slope_deg(x, y) > MAX_SLOPE_DEG:
-            return "slope"
         return None
 
     def _move(self, distance: float) -> tuple[float, float, Optional[str]]:
         """Avanza `distance` metros (negativo = retroceso) barriendo en pasos
-        pequeños para detenerse justo antes de una colisión.
-        Devuelve (metros recorridos, metros subidos, motivo de bloqueo)."""
+        pequeños para detenerse justo antes de una colisión. Si en algún paso
+        el cabeceo o el alabeo superan el límite, el rover vuelca ahí.
+        Devuelve (metros recorridos, metros subidos, motivo: 'edge' | 'rock' |
+        'overturned' | None)."""
         rad = math.radians(self.heading)
         dx, dy = math.cos(rad), math.sin(rad)
         sign = 1.0 if distance >= 0 else -1.0
@@ -316,6 +320,10 @@ class Rover:
             self.x, self.y = nx, ny
             moved += step
             remaining -= step
+            _, pitch, roll = self._attitude_at(self.x, self.y, self.heading)
+            if abs(pitch) > TIP_PITCH_DEG or abs(roll) > TIP_ROLL_DEG:
+                self.overturned = True
+                return moved, climbed, "overturned"
         return moved, climbed, None
 
     # ------------------------------------------------------------------ #
@@ -325,6 +333,9 @@ class Rover:
             applied = 0.0
             hazard: Optional[str] = None
 
+            if self.overturned and action != "stop":
+                self.speed = 0.0
+                return self._result(action, 0.0, True, "overturned")
             if self.battery <= 0 and action != "stop":
                 self.speed = 0.0
                 return self._result(action, 0.0, False, "battery_empty")
@@ -342,6 +353,11 @@ class Rover:
                 applied = delta
                 self.battery -= delta * BATTERY_PER_DEGREE
                 self.speed = 0.0
+                # Girar de lado en una ladera también puede volcarlo
+                _, pitch, roll = self.attitude()
+                if abs(pitch) > TIP_PITCH_DEG or abs(roll) > TIP_ROLL_DEG:
+                    self.overturned = True
+                    hazard = "overturned"
             elif action == "stop":
                 self.speed = 0.0
 
@@ -349,7 +365,8 @@ class Rover:
             self.blocked = hazard is not None
             self.hazard = hazard
             self._last_cmd_time = time.time()
-            return self._result(action, applied, self.blocked, "ok")
+            return self._result(action, applied, self.blocked,
+                                "overturned" if self.overturned else "ok")
 
     def _result(self, action: str, applied: float, blocked: bool, status: str) -> dict:
         return {"ok": status == "ok", "status": status, "action": action,
@@ -374,7 +391,7 @@ class Rover:
             if abs(rel) <= half_fov and dist_surface <= SENSOR_RANGE:
                 found.append((dist_surface, "rock"))
 
-        # Pendientes intransitables: se muestrea el terreno en 3 rayos del cono
+        # Pendientes peligrosas (riesgo de vuelco): 3 rayos dentro del cono
         for off in (-half_fov / 2, 0.0, half_fov / 2):
             ang = heading_rad + off
             d = 0.25
@@ -398,17 +415,22 @@ class Rover:
         return True, round(max(dist, 0.0), 2), kind
 
     def attitude(self) -> tuple[float, float, float]:
-        """(altura, cabeceo, alabeo) del rover según el terreno bajo sus ruedas.
-        pitch > 0 = morro arriba; roll > 0 = inclinado hacia la derecha."""
-        rad = math.radians(self.heading)
+        """(altura, cabeceo, alabeo) del rover en su posición actual."""
+        return self._attitude_at(self.x, self.y, self.heading)
+
+    @staticmethod
+    def _attitude_at(x: float, y: float, heading: float) -> tuple[float, float, float]:
+        """(altura, cabeceo, alabeo) según el terreno bajo las ruedas.
+        pitch > 0 = morro arriba; roll > 0 = lado izquierdo más alto."""
+        rad = math.radians(heading)
         fx, fy = math.cos(rad), math.sin(rad)          # Vector frontal
         lx, ly = -fy, fx                               # Vector izquierdo
         hw, ht = WHEELBASE / 2, TRACK_WIDTH / 2
         h = WORLD.height_at
-        front = h(self.x + fx * hw, self.y + fy * hw)
-        back = h(self.x - fx * hw, self.y - fy * hw)
-        left = h(self.x + lx * ht, self.y + ly * ht)
-        right = h(self.x - lx * ht, self.y - ly * ht)
+        front = h(x + fx * hw, y + fy * hw)
+        back = h(x - fx * hw, y - fy * hw)
+        left = h(x + lx * ht, y + ly * ht)
+        right = h(x - lx * ht, y - ly * ht)
         z = (front + back + left + right) / 4
         pitch = math.degrees(math.atan2(front - back, WHEELBASE))
         roll = math.degrees(math.atan2(left - right, TRACK_WIDTH))
@@ -433,6 +455,7 @@ class Rover:
             "obstacle_type": kind,
             "blocked": self.blocked,
             "blocked_by": self.hazard,
+            "overturned": self.overturned,
             "odometer": round(self.odometer, 3),
             "timestamp": time.time(),
         }
@@ -574,6 +597,8 @@ def world() -> dict:
         "sensor_range": SENSOR_RANGE,
         "sensor_fov_deg": SENSOR_FOV_DEG,
         "max_slope_deg": MAX_SLOPE_DEG,
+        "tip_pitch_deg": TIP_PITCH_DEG,
+        "tip_roll_deg": TIP_ROLL_DEG,
         "rocks": [asdict(r) for r in WORLD.rocks],
         "craters": [asdict(c) for c in WORLD.craters],
         "heightmap": {

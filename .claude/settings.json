@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p .claude 2>/dev/null; : > .claude/.session_start_marker",
+            "statusMessage": "Marcando inicio de sesion..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "code_changed=$(git status --porcelain -- . ':!.handoff' ':!presentaciones' 2>/dev/null); marker=.claude/.session_start_marker; if [ -z \"$code_changed\" ] || [ ! -f \"$marker\" ]; then echo '{}'; exit 0; fi; shopt -s nullglob; handoff_updated=false; for f in .handoff/*.md; do if [ \"$f\" -nt \"$marker\" ]; then handoff_updated=true; fi; done; if [ \"$handoff_updated\" = true ]; then echo '{}'; else echo '{\"decision\":\"block\",\"reason\":\"Hiciste cambios en el proyecto pero .handoff/ no tiene una nota nueva desde que arranco esta sesion. Antes de terminar, escribi o actualiza .handoff/clase-NN.md resumiendo que se hizo, que quedo pendiente, y contexto para la proxima clase.\"}'; fi",
+            "statusMessage": "Chequeando si falta dejar handoff..."
+          }
+        ]
+      }
+    ]
+  }
+}

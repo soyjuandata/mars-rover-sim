@@ -9,11 +9,12 @@
   /*  Layout general: canvas 3D a pantalla completa + HUD superpuesto    */
   /* ------------------------------------------------------------------ */
   :root {
-    --panel: rgba(20, 12, 8, 0.72);
+    --panel: rgba(20, 12, 8, 0.74);
     --border: rgba(255, 170, 110, 0.35);
     --accent: #ffb070;
     --ok: #7ee787;
-    --warn: #ff6b57;
+    --warn: #ffa94d;
+    --bad: #ff5a4d;
     --text: #f5e6d8;
   }
   * { box-sizing: border-box; }
@@ -27,66 +28,151 @@
   .panel h1 { font-size: 15px; margin: 0 0 6px; color: var(--accent); letter-spacing: .5px; }
   .panel h2 { font-size: 11px; margin: 8px 0 4px; text-transform: uppercase;
     letter-spacing: 1px; opacity: .7; }
+  .panel h2:first-child { margin-top: 0; }
 
-  /* Telemetría (arriba izquierda) */
-  #telemetry { top: 14px; left: 14px; min-width: 230px; }
-  #telemetry table { border-collapse: collapse; width: 100%; }
-  #telemetry td { padding: 1px 0; }
-  #telemetry td:last-child { text-align: right; font-family: Consolas, monospace; color: #fff; }
-  #battery-bar { height: 8px; background: rgba(255,255,255,.12); border-radius: 4px; overflow: hidden; margin-top: 4px; }
-  #battery-fill { height: 100%; width: 100%; background: var(--ok); transition: width .3s, background .3s; }
+  /* Qué se ve en cada modo: body.mode-globe | mode-mission | mode-rover */
+  .only-mission, .only-rover, .only-globe, .only-terrain { display: none !important; }
+  body.mode-mission .only-mission, body.mode-rover .only-rover,
+  body.mode-globe .only-globe { display: block !important; }
+  body.mode-mission .only-terrain, body.mode-rover .only-terrain { display: block !important; }
+  body.mode-mission #viewbar.only-terrain, body.mode-rover #viewbar.only-terrain { display: flex !important; }
+
+  button { background: rgba(255,176,112,.14); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; cursor: pointer; font: 600 12px "Segoe UI", system-ui, sans-serif;
+    padding: 6px 10px; transition: background .15s; }
+  button:hover { background: rgba(255,176,112,.35); }
+  button:active, button.on { background: var(--accent); color: #2a1408; }
+  button:disabled { opacity: .4; cursor: default; background: rgba(255,176,112,.08); color: var(--text); }
+
+  table { border-collapse: collapse; width: 100%; }
+  td { padding: 1px 0; }
+  td:last-child { text-align: right; font-family: Consolas, monospace; color: #fff; }
+  .bar { height: 8px; background: rgba(255,255,255,.12); border-radius: 4px; overflow: hidden; margin-top: 4px; }
+  .bar > div { height: 100%; width: 100%; background: var(--ok); transition: width .3s, background .3s; }
   .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px;
     font-weight: 600; background: rgba(126,231,135,.18); color: var(--ok); }
-  .badge.alert { background: rgba(255,107,87,.2); color: var(--warn); }
-  #conn { font-size: 11px; opacity: .8; margin-top: 6px; }
-  #conn.off { color: var(--warn); opacity: 1; }
-
-  /* Controles (abajo izquierda) */
-  #controls { bottom: 14px; left: 14px; }
-  .dpad { display: grid; grid-template-columns: repeat(3, 44px); gap: 6px; margin: 6px 0; }
-  .dpad button, .row button { background: rgba(255,176,112,.14); color: var(--text);
-    border: 1px solid var(--border); border-radius: 8px; height: 40px; cursor: pointer;
-    font-size: 13px; font-weight: 600; transition: background .15s; }
-  .dpad button:hover, .row button:hover { background: rgba(255,176,112,.35); }
-  .dpad button:active, .row button:active { background: var(--accent); color: #2a1408; }
-  .row { display: flex; gap: 6px; margin-top: 6px; }
-  .row button { flex: 1; padding: 0 10px; }
-  .hint { font-size: 11px; opacity: .65; margin-top: 8px; }
+  .badge.warn { background: rgba(255,169,77,.2); color: var(--warn); }
+  .badge.alert { background: rgba(255,90,77,.22); color: var(--bad); }
+  .conn { font-size: 11px; opacity: .8; margin-top: 6px; }
+  .conn.off { color: var(--bad); opacity: 1; }
   kbd { background: rgba(255,255,255,.12); padding: 0 5px; border-radius: 4px; font-family: Consolas, monospace; }
+
+  /* Centro de control (arriba izquierda, modo misión) */
+  #mission-panel { top: 14px; left: 14px; width: 290px; max-height: calc(100vh - 250px); overflow-y: auto; }
+  .btn-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .btn-row button { flex: 1; }
+  #wp-list { list-style: none; margin: 6px 0 0; padding: 0; max-height: 170px; overflow-y: auto;
+    font-family: Consolas, monospace; font-size: 12px; }
+  #wp-list li { display: flex; justify-content: space-between; gap: 6px; padding: 2px 4px; border-radius: 4px; }
+  #wp-list li.current { background: rgba(255,176,112,.18); }
+  #wp-list li.done { opacity: .45; }
+  .seg-ok { color: var(--ok); } .seg-slope { color: var(--warn); } .seg-rock, .seg-tip { color: var(--bad); }
+  .hint { font-size: 11px; opacity: .65; margin-top: 6px; }
+
+  /* Vista rover: minimapa (arriba izquierda) */
+  #rover-panel { top: 14px; left: 14px; padding: 8px; }
+  #minimap { display: block; width: 240px; height: 240px; border-radius: 6px; border: 1px solid var(--border);
+    cursor: crosshair; background: #1a0d08; }
+  #rover-strip { display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    margin-top: 6px; font-size: 12px; font-family: Consolas, monospace; }
+  #rover-panel .bar { margin: 4px 0 2px; }
+
+  /* Controles manuales (abajo izquierda) */
+  #controls { bottom: 14px; left: 14px; }
+  .dpad { display: grid; grid-template-columns: repeat(3, 40px); gap: 5px; margin: 4px 0; }
+  .dpad button { height: 36px; padding: 0; font-size: 13px; }
+
+  /* Barra de vistas (arriba derecha) */
+  #viewbar { position: fixed; top: 14px; right: 14px; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 60vw; }
 
   /* HazCam (abajo derecha) */
   #hazcam-panel { bottom: 14px; right: 14px; padding: 8px; }
   #hazcam-panel h2 { margin: 0 0 6px; display: flex; justify-content: space-between; align-items: center; }
   #hazcam { display: block; width: 320px; height: 240px; border-radius: 6px;
-    border: 1px solid var(--border); background: #000; image-rendering: auto; }
-  #hazcam-panel .rec { color: var(--warn); font-size: 10px; }
+    border: 1px solid var(--border); background: #000; }
+  #hazcam-panel .rec { color: var(--bad); font-size: 10px; }
+  body.hazcam-full #hazcam-panel { display: none !important; }
+
+  /* Aviso central (vuelco, misión completada, bloqueo) */
+  #banner { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); padding: 10px 18px;
+    border-radius: 10px; font-weight: 700; font-size: 15px; display: none; text-align: center;
+    border: 1px solid var(--border); backdrop-filter: blur(6px); max-width: 60vw; }
+  #banner.show { display: block; }
+  #banner.bad { background: rgba(120, 20, 14, .85); border-color: var(--bad); }
+  #banner.good { background: rgba(20, 70, 30, .85); border-color: var(--ok); }
+  #banner.warn { background: rgba(110, 60, 10, .85); border-color: var(--warn); }
+  #banner button { margin-left: 10px; }
+
+  /* Intro en órbita */
+  #intro { position: fixed; left: 50%; bottom: 9vh; transform: translateX(-50%); text-align: center; }
+  #intro h1 { margin: 0; font-size: 34px; letter-spacing: 6px; font-weight: 300; color: #ffd9b8; }
+  #intro p { margin: 6px 0 18px; opacity: .75; letter-spacing: 1px; }
+  #intro button { font-size: 15px; padding: 10px 22px; background: rgba(255,140,70,.25); }
+  #fade { position: fixed; inset: 0; background: #e9b98c; opacity: 0; pointer-events: none; }
+  body.picking #scene { cursor: crosshair; }
 </style>
 </head>
-<body>
+<body class="mode-globe">
 
 <canvas id="scene"></canvas>
 
 <!-- ---------------------------------------------------------------- -->
-<!--  HUD                                                             -->
+<!--  Intro: Marte en órbita                                          -->
 <!-- ---------------------------------------------------------------- -->
-<div id="telemetry" class="panel">
-  <h2>Telemetría</h2>
-  <table>
-    <tr><td>Posición X</td><td id="t-x">0.00 m</td></tr>
-    <tr><td>Posición Y</td><td id="t-y">0.00 m</td></tr>
-    <tr><td>Rumbo</td><td id="t-heading">0°</td></tr>
-    <tr><td>Velocidad</td><td id="t-speed">0.00 m/s</td></tr>
-    <tr><td>Altitud</td><td id="t-z">0.00 m</td></tr>
-    <tr><td>Cabeceo / alabeo</td><td id="t-tilt">0° / 0°</td></tr>
-    <tr><td>Odómetro</td><td id="t-odo">0.00 m</td></tr>
-    <tr><td>Obstáculo</td><td><span id="t-obstacle" class="badge">libre</span></td></tr>
-  </table>
-  <h2>Batería <span id="t-battery" style="float:right">100%</span></h2>
-  <div id="battery-bar"><div id="battery-fill"></div></div>
-  <div id="conn">● conectando…</div>
+<div id="intro" class="only-globe">
+  <h1>MISIÓN MARTE</h1>
+  <p>Centro de control · zona de exploración de 200 × 200 m</p>
+  <button id="btn-descend">▼ Descender a la zona</button>
 </div>
 
-<div id="controls" class="panel">
+<!-- ---------------------------------------------------------------- -->
+<!--  Centro de control (modo misión)                                  -->
+<!-- ---------------------------------------------------------------- -->
+<div id="mission-panel" class="panel only-mission">
+  <h2>Telemetría</h2>
+  <table>
+    <tr><td>Posición X / Y</td><td id="t-xy">0.0 / 0.0 m</td></tr>
+    <tr><td>Altitud</td><td id="t-z">0.00 m</td></tr>
+    <tr><td>Rumbo</td><td id="t-heading">0°</td></tr>
+    <tr><td>Cabeceo / alabeo</td><td id="t-tilt">0° / 0°</td></tr>
+    <tr><td>Velocidad</td><td id="t-speed">0.00 m/s</td></tr>
+    <tr><td>Odómetro</td><td id="t-odo">0.00 m</td></tr>
+    <tr><td>Sensor</td><td><span id="t-obstacle" class="badge">libre</span></td></tr>
+  </table>
+  <h2>Batería <span id="t-battery" style="float:right">100%</span></h2>
+  <div class="bar"><div id="battery-fill"></div></div>
+
+  <h2>Misión <span id="m-status" class="badge" style="float:right">planificando</span></h2>
+  <div class="btn-row">
+    <button id="btn-plan" title="Clic en el terreno para agregar waypoints">✏ Trazar ruta</button>
+    <button id="btn-undo">↶ Deshacer</button>
+    <button id="btn-clear">✕ Borrar</button>
+  </div>
+  <div class="btn-row">
+    <button id="btn-start">▶ Iniciar</button>
+    <button id="btn-pause">❚❚ Pausar</button>
+  </div>
+  <ul id="wp-list"></ul>
+  <div id="route-summary" class="hint">Sin ruta. Pulsa “Trazar ruta” y haz clic en el terreno.</div>
+  <div id="conn" class="conn">● conectando…</div>
+</div>
+
+<!-- ---------------------------------------------------------------- -->
+<!--  Vista rover: minimapa                                            -->
+<!-- ---------------------------------------------------------------- -->
+<div id="rover-panel" class="panel only-rover">
+  <h2>Mapa <span style="float:right"><button id="btn-zoom" style="padding:0 8px">🔍 200 m</button></span></h2>
+  <canvas id="minimap" width="480" height="480"></canvas>
+  <div class="bar"><div id="battery-fill-2"></div></div>
+  <div id="rover-strip">
+    <span id="r-battery">🔋 100%</span>
+    <span id="r-next">—</span>
+    <span id="r-status" class="badge">planificando</span>
+  </div>
+</div>
+
+<!-- Controles manuales (misión y rover) -->
+<div id="controls" class="panel only-terrain">
   <h2>Control manual</h2>
   <div class="dpad">
     <span></span><button data-action="forward" data-value="1">▲</button><span></span>
@@ -95,27 +181,43 @@
     <button data-action="turn_right" data-value="15">▶</button>
     <span></span><button data-action="backward" data-value="1">▼</button><span></span>
   </div>
-  <div class="row">
-    <button id="btn-cam">📷 Ver HazCam</button>
-    <button id="btn-reset">↺ Reiniciar</button>
-  </div>
-  <div class="hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> mover · <kbd>Espacio</kbd> parar · <kbd>C</kbd> cámara</div>
+  <div class="btn-row"><button id="btn-reset">↺ Reiniciar</button></div>
+  <div class="hint"><kbd>WASD</kbd> mover · <kbd>Espacio</kbd> parar<br><kbd>Tab</kbd> control/rover · <kbd>C</kbd> HazCam</div>
 </div>
 
-<div id="hazcam-panel" class="panel">
+<!-- Barra de vistas -->
+<div id="viewbar" class="only-terrain">
+  <button id="btn-orbit" class="only-mission">🪐 Órbita</button>
+  <button id="btn-hazard" class="only-mission">⚠ Capa de peligro</button>
+  <button id="btn-follow" class="only-mission on">⌖ Seguir rover</button>
+  <button id="btn-cam" class="only-rover">📷 HazCam</button>
+  <button id="btn-view">🚙 Vista rover</button>
+</div>
+
+<div id="hazcam-panel" class="panel only-terrain">
   <h2>HazCam frontal <span class="rec">● REC</span></h2>
   <canvas id="hazcam" width="320" height="240"></canvas>
 </div>
+
+<div id="banner"></div>
+<div id="fade"></div>
 
 <!-- ---------------------------------------------------------------- -->
 <!--  Three.js vía CDN (ES modules + importmap, sin build)             -->
 <!-- ---------------------------------------------------------------- -->
 <script type="importmap">
-{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
 </script>
 
 <script type="module">
 import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { Line2 } from "three/addons/lines/Line2.js";
+import { LineMaterial } from "three/addons/lines/LineMaterial.js";
+import { LineGeometry } from "three/addons/lines/LineGeometry.js";
 
 /* ================================================================== */
 /*  Configuración                                                      */
@@ -124,11 +226,23 @@ const API = "";                    // Mismo origen que el servidor
 const POLL_MS = 100;               // Frecuencia de lectura de telemetría
 const FRAME_PUSH_MS = 250;         // Frecuencia de subida del frame HazCam
 const HAZ_W = 320, HAZ_H = 240;    // Resolución HazCam
+const PILOT_MS = 120;              // Pausa entre comandos del piloto automático
+const WP_REACHED = 1.5;            // Distancia (m) a la que un waypoint cuenta como alcanzado
+const HEADING_TOL = 4;             // Error de rumbo (°) tolerado antes de avanzar
+const OVERLAY_LAYER = 1;           // Capa de ruta/marcadores: no aparece en la HazCam
+const MISSION_LAYER = 2;           // Solo visible desde el centro de control (baliza del rover)
+
+// Valores por defecto; se sobrescriben con /api/world
+const LIMITS = { roverRadius: 1.0, maxSlope: 25, tipPitch: 35, tipRoll: 30 };
+const WHEELBASE = 2.2, TRACK_WIDTH = 1.8;              // Igual que server.py
+
+const $ = id => document.getElementById(id);
+const KIND = { rock: "roca", slope: "pendiente", edge: "borde", overturned: "vuelco" };
 
 /* ================================================================== */
-/*  Escena, renderer y cámaras                                         */
+/*  Renderer, escenas y cámaras                                        */
 /* ================================================================== */
-const canvas = document.getElementById("scene");
+const canvas = $("scene");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -138,13 +252,29 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 const SKY = 0xd9a066;                          // Cielo marciano (butterscotch)
 scene.background = new THREE.Color(SKY);
-scene.fog = new THREE.Fog(SKY, 25, 150);       // Niebla atmosférica (mapa de 200 m)
+scene.fog = new THREE.Fog(SKY, 25, 150);
+// Niebla según la cámara: a ras de suelo es densa; desde el centro de control, casi nula
+const FOG = { ground: [25, 150], mission: [260, 900] };
 
 // Cámara de seguimiento en tercera persona
-const chaseCam = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 300);
+const chaseCam = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 400);
 chaseCam.position.set(-8, 5, 0);
+chaseCam.layers.enable(OVERLAY_LAYER);
 
-// HazCam: se cuelga del mástil del rover, mira hacia +X (frente del rover)
+// Cámara del centro de control (órbita libre sobre la zona)
+const missionCam = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.5, 2000);
+missionCam.position.set(0, 60, 70);
+missionCam.layers.enable(OVERLAY_LAYER);
+missionCam.layers.enable(MISSION_LAYER);
+const controls = new OrbitControls(missionCam, canvas);
+controls.enableDamping = true;
+controls.maxPolarAngle = THREE.MathUtils.degToRad(84);
+controls.minDistance = 6;
+controls.maxDistance = 320;
+controls.enabled = false;
+
+// HazCam: se cuelga del mástil del rover, mira hacia +X (frente del rover).
+// Solo ve la capa 0: la ruta y los marcadores no contaminan la imagen de la IA.
 const hazCam = new THREE.PerspectiveCamera(70, HAZ_W / HAZ_H, 0.1, 150);
 hazCam.rotation.set(0, -Math.PI / 2, 0);       // -Z de la cámara -> +X del rover
 hazCam.rotateX(-0.18);                         // Ligera inclinación hacia el suelo
@@ -152,7 +282,7 @@ hazCam.rotateX(-0.18);                         // Ligera inclinación hacia el s
 // Render target donde se dibuja la HazCam para leer sus píxeles
 const hazTarget = new THREE.WebGLRenderTarget(HAZ_W, HAZ_H);
 const hazPixels = new Uint8Array(HAZ_W * HAZ_H * 4);
-const hazCanvas = document.getElementById("hazcam");
+const hazCanvas = $("hazcam");
 const hazCtx = hazCanvas.getContext("2d");
 const hazImage = hazCtx.createImageData(HAZ_W, HAZ_H);
 
@@ -160,21 +290,29 @@ const hazImage = hazCtx.createImageData(HAZ_W, HAZ_H);
 /*  Iluminación                                                        */
 /* ================================================================== */
 scene.add(new THREE.HemisphereLight(0xffd6b0, 0x6b2f16, 0.8));
-// El sol sigue al rover: la caja de sombras (±45 m) no cubre un mapa de 200 m
+// El sol sigue al rover: la caja de sombras (±45 m) no cubre un mapa de 200 m.
+// En el centro de control se agranda para cubrir toda la zona.
 const SUN_OFFSET = new THREE.Vector3(30, 40, 20);
 const sun = new THREE.DirectionalLight(0xffe0c0, 1.6);
 sun.position.copy(SUN_OFFSET);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.left = sun.shadow.camera.bottom = -45;
-sun.shadow.camera.right = sun.shadow.camera.top = 45;
-sun.shadow.camera.far = 150;
+sun.shadow.camera.far = 400;
 sun.shadow.bias = -0.0005;
 sun.shadow.normalBias = 0.05;
 scene.add(sun, sun.target);
 
+function setShadowBox(half) {
+  const c = sun.shadow.camera;
+  if (c.right === half) return;
+  c.left = c.bottom = -half;
+  c.right = c.top = half;
+  c.updateProjectionMatrix();
+}
+setShadowBox(45);
+
 /* ================================================================== */
-/*  Terreno: plano con textura procedural rojiza                       */
+/*  Terreno: malla del heightmap del backend                           */
 /* ================================================================== */
 function makeGroundTexture() {
   const c = document.createElement("canvas");
@@ -196,7 +334,10 @@ function makeGroundTexture() {
 }
 
 // Mapa de alturas del backend (null = terreno plano)
-let terrain = null;   // { half, res, cells, data: Float32Array }
+let terrain = null;   // { half, res, cells, data: Float32Array, slope: Float32Array }
+let terrainMesh = null;
+let terrainColors = null;   // { normal, hazard } buffers de color por vértice
+let rocks = [];
 
 // Altura del terreno en coordenadas del backend (x, y). Réplica exacta de
 // World.height_at en server.py: misma malla y misma diagonal de triángulos,
@@ -214,32 +355,76 @@ function heightAt(x, y) {
   return h00 + (h01 - h00) * fy + (h11 - h01) * fx;
 }
 
+// Pendiente (°) en (x, y), igual que World.slope_deg
+function slopeAt(x, y) {
+  const e = 0.5;
+  const gx = (heightAt(x + e, y) - heightAt(x - e, y)) / (2 * e);
+  const gy = (heightAt(x, y + e) - heightAt(x, y - e)) / (2 * e);
+  return Math.atan(Math.hypot(gx, gy)) * 180 / Math.PI;
+}
+
+// Altura y orientación del rover según el terreno bajo sus ruedas (igual que
+// Rover._attitude_at). Ángulos en grados; pitch > 0 = morro arriba,
+// roll > 0 = lado izquierdo más alto.
+function attitudeAt(x, y, headingDeg) {
+  const rad = THREE.MathUtils.degToRad(headingDeg);
+  const fx = Math.cos(rad), fy = Math.sin(rad), lx = -fy, ly = fx;
+  const hw = WHEELBASE / 2, ht = TRACK_WIDTH / 2;
+  const front = heightAt(x + fx * hw, y + fy * hw), back = heightAt(x - fx * hw, y - fy * hw);
+  const left = heightAt(x + lx * ht, y + ly * ht), right = heightAt(x - lx * ht, y - ly * ht);
+  return {
+    z: (front + back + left + right) / 4,
+    pitch: Math.atan2(front - back, WHEELBASE) * 180 / Math.PI,
+    roll: Math.atan2(left - right, TRACK_WIDTH) * 180 / Math.PI,
+  };
+}
+
+// Pendiente por vértice de la malla (°); la usan los colores y el minimapa
+function computeSlopeGrid() {
+  const { res, cells, data } = terrain;
+  const row = cells + 1;
+  const at = (i, j) => data[Math.min(Math.max(j, 0), cells) * row + Math.min(Math.max(i, 0), cells)];
+  const slope = new Float32Array(row * row);
+  for (let j = 0; j <= cells; j++) {
+    for (let i = 0; i <= cells; i++) {
+      const gx = (at(i + 1, j) - at(i - 1, j)) / (2 * res);
+      const gy = (at(i, j + 1) - at(i, j - 1)) / (2 * res);
+      slope[j * row + i] = Math.atan(Math.hypot(gx, gy)) * 180 / Math.PI;
+    }
+  }
+  return slope;
+}
+
 // Malla del relieve: vértice (i, j) = backend (x, y) -> three (x, h, -y).
 // Cada celda se parte por la diagonal (i, j)-(i+1, j+1), igual que el backend.
-function buildTerrainGeometry(size) {
-  const { half, res, cells, data } = terrain;
+function buildTerrainGeometry() {
+  const { half, res, cells, data, slope } = terrain;
   const row = cells + 1;
   const pos = new Float32Array(row * row * 3);
   const uv = new Float32Array(row * row * 2);
   const col = new Float32Array(row * row * 3);
+  const haz = new Float32Array(row * row * 3);
   const dust = new THREE.Color(1.0, 0.94, 0.86);      // Polvo claro en llanos y crestas
   const bedrock = new THREE.Color(0.58, 0.46, 0.42);  // Roca expuesta en pendientes
+  const warn = new THREE.Color(1.6, 1.35, 0.25);      // Capa de peligro: pendiente > 25° (amarillo)
+  const danger = new THREE.Color(1.6, 0.2, 0.9);      // Capa de peligro: riesgo de vuelco (magenta)
   const c = new THREE.Color();
-  const at = (i, j) => data[Math.min(Math.max(j, 0), cells) * row + Math.min(Math.max(i, 0), cells)];
 
   for (let j = 0; j <= cells; j++) {
     for (let i = 0; i <= cells; i++) {
       const k = j * row + i;
-      const x = -half + i * res, y = -half + j * res, h = data[k];
+      const x = -half + i * res, y = -half + j * res, h = data[k], s = slope[k];
       pos.set([x, h, -y], k * 3);
       uv.set([x / 8, y / 8], k * 2);                   // Textura en metros (1 repetición / 8 m)
       // Color según pendiente (roca oscura) y altura (fondos de cráter más oscuros)
-      const gx = (at(i + 1, j) - at(i - 1, j)) / (2 * res);
-      const gy = (at(i, j + 1) - at(i, j - 1)) / (2 * res);
-      const slope = Math.atan(Math.hypot(gx, gy)) * 180 / Math.PI;
-      c.copy(dust).lerp(bedrock, Math.min(slope / 28, 1));
+      c.copy(dust).lerp(bedrock, Math.min(s / 28, 1));
       c.multiplyScalar(THREE.MathUtils.clamp(0.92 + h * 0.03, 0.72, 1.05));
       col.set([c.r, c.g, c.b], k * 3);
+      // Capa de peligro: lo seguro se apaga para que resalten las pendientes
+      if (s > LIMITS.tipRoll) c.copy(danger);
+      else if (s > LIMITS.maxSlope) c.copy(warn);
+      else c.multiplyScalar(0.55);
+      haz.set([c.r, c.g, c.b], k * 3);
     }
   }
 
@@ -256,10 +441,18 @@ function buildTerrainGeometry(size) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
   geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
-  geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  geo.setAttribute("color", new THREE.BufferAttribute(col.slice(), 3));
   geo.setIndex(new THREE.BufferAttribute(idx, 1));
   geo.computeVertexNormals();
+  terrainColors = { normal: col, hazard: haz };
   return geo;
+}
+
+function setHazardLayer(on) {
+  if (!terrainColors) return;
+  const attr = terrainMesh.geometry.attributes.color;
+  attr.array.set(on ? terrainColors.hazard : terrainColors.normal);
+  attr.needsUpdate = true;
 }
 
 function buildGround(world) {
@@ -267,22 +460,22 @@ function buildGround(world) {
   const hm = world.heightmap;
   if (hm && hm.data && hm.data.length === hm.size * hm.size) {
     terrain = { half: size / 2, res: hm.resolution, cells: hm.size - 1, data: Float32Array.from(hm.data) };
+    terrain.slope = computeSlopeGrid();
   }
 
   const tex = makeGroundTexture();
-  let ground;
   if (terrain) {
-    ground = new THREE.Mesh(buildTerrainGeometry(size),
+    terrainMesh = new THREE.Mesh(buildTerrainGeometry(),
       new THREE.MeshStandardMaterial({ map: tex, vertexColors: true, roughness: 1, metalness: 0 }));
   } else {
     // Servidor sin mapa de alturas: plano como antes
     tex.repeat.set(size / 8, size / 8);
-    ground = new THREE.Mesh(new THREE.PlaneGeometry(size, size),
+    terrainMesh = new THREE.Mesh(new THREE.PlaneGeometry(size, size),
       new THREE.MeshStandardMaterial({ map: tex, roughness: 1, metalness: 0 }));
-    ground.rotation.x = -Math.PI / 2;
+    terrainMesh.rotation.x = -Math.PI / 2;
   }
-  ground.receiveShadow = true;
-  scene.add(ground);
+  terrainMesh.receiveShadow = true;
+  scene.add(terrainMesh);
 
   // Plano exterior "infinito" para que el horizonte no se corte
   const outer = new THREE.Mesh(
@@ -304,9 +497,10 @@ function buildGround(world) {
 /* ================================================================== */
 /*  Rocas / obstáculos (posiciones vienen del backend)                 */
 /* ================================================================== */
-function buildRocks(rocks) {
+function buildRocks(list) {
+  rocks = list;
   const mat = new THREE.MeshStandardMaterial({ color: 0x5a3a2c, roughness: 0.95, flatShading: true });
-  for (const r of rocks) {
+  for (const r of list) {
     const geo = new THREE.DodecahedronGeometry(r.radius, 1);
     // Deformación de vértices para que no parezcan poliedros perfectos.
     // Se usa un "ruido" determinista en función de la posición: así los
@@ -405,6 +599,15 @@ function buildRover() {
   headlight.position.set(1.3, 1.0, 0);
   rover.add(headlight);
 
+  // Baliza visible desde el centro de control (solo capa de overlay)
+  const beacon = new THREE.Mesh(new THREE.RingGeometry(1.6, 2.1, 40),
+    new THREE.MeshBasicMaterial({ color: 0x5fd0ff, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthTest: false }));
+  beacon.rotation.x = -Math.PI / 2;
+  beacon.position.y = 0.15;
+  beacon.renderOrder = 10;
+  beacon.layers.set(MISSION_LAYER);
+  rover.add(beacon);
+
   scene.add(rover);
 }
 
@@ -413,24 +616,10 @@ function buildRover() {
 /* ================================================================== */
 const target = { x: 0, y: 0, heading: 90 };           // Último valor del backend
 const smooth = { x: 0, y: 0, heading: 90 };           // Valor interpolado en pantalla
-let camMode = "chase";                                 // "chase" | "hazcam"
 let lastTelemetry = null;
-
-// Altura y orientación (radianes) del rover según el terreno bajo sus ruedas.
-// pitch > 0 = morro arriba; roll > 0 = lado izquierdo más alto.
-const WHEELBASE = 2.2, TRACK_WIDTH = 1.8;              // Igual que server.py
-function attitudeAt(x, y, headingDeg) {
-  const rad = THREE.MathUtils.degToRad(headingDeg);
-  const fx = Math.cos(rad), fy = Math.sin(rad), lx = -fy, ly = fx;
-  const hw = WHEELBASE / 2, ht = TRACK_WIDTH / 2;
-  const front = heightAt(x + fx * hw, y + fy * hw), back = heightAt(x - fx * hw, y - fy * hw);
-  const left = heightAt(x + lx * ht, y + ly * ht), right = heightAt(x - lx * ht, y - ly * ht);
-  return {
-    z: (front + back + left + right) / 4,
-    pitch: Math.atan2(front - back, WHEELBASE),
-    roll: Math.atan2(left - right, TRACK_WIDTH),
-  };
-}
+let mode = "globe";                                    // "globe" | "mission" | "rover"
+let hazFull = false;                                   // HazCam a pantalla completa (modo rover)
+const tip = { amount: 0, axis: "roll", sign: 1 };      // Animación de vuelco
 
 // Diferencia angular más corta (grados) para interpolar rumbos sin dar vueltas
 function shortestDelta(a, b) {
@@ -443,14 +632,11 @@ function shortestDelta(a, b) {
 /* ================================================================== */
 /*  Comunicación con el backend                                        */
 /* ================================================================== */
-const connEl = document.getElementById("conn");
+const connEl = $("conn");
 
 async function pollTelemetry() {
   try {
-    const t = await (await fetch(`${API}/api/telemetry`)).json();
-    target.x = t.x; target.y = t.y; target.heading = t.heading;
-    lastTelemetry = t;
-    updateHud(t);
+    applyTelemetry(await (await fetch(`${API}/api/telemetry`)).json());
     connEl.textContent = "● conectado a /api/telemetry";
     connEl.classList.remove("off");
   } catch {
@@ -459,13 +645,16 @@ async function pollTelemetry() {
   }
 }
 
+// Envía un comando y devuelve la respuesta del backend (o null si falla)
 async function sendCommand(action, value = 1) {
   try {
-    await fetch(`${API}/api/control`, {
+    const res = await (await fetch(`${API}/api/control`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action, value: Number(value) }),
-    });
-  } catch { /* la telemetría marcará la desconexión */ }
+    })).json();
+    if (res.telemetry) applyTelemetry(res.telemetry);
+    return res;
+  } catch { return null; }   // la telemetría marcará la desconexión
 }
 
 // Sube el frame de la HazCam para que /api/camera devuelva la vista real
@@ -479,47 +668,807 @@ async function pushFrame() {
   } catch { /* silencioso */ }
 }
 
+function applyTelemetry(t) {
+  const prev = lastTelemetry;
+  // El polling y las respuestas del piloto pueden llegar desordenadas: se
+  // descarta cualquier lectura más vieja que la última aplicada. En Windows
+  // time.time() tiene ~15 ms de resolución, así que dos lecturas pueden
+  // compartir timestamp: si además tiene menos odómetro, es la más vieja.
+  if (prev && (t.timestamp < prev.timestamp ||
+      (t.timestamp === prev.timestamp && t.odometer < prev.odometer))) return;
+  target.x = t.x; target.y = t.y; target.heading = t.heading;
+  lastTelemetry = t;
+
+  // Reinicio detectado (odómetro vuelve a 0 o deja de estar volcado)
+  if (prev && (t.odometer < prev.odometer - 0.01 || (prev.overturned && !t.overturned))) onRoverReset();
+
+  // Vuelco: se decide hacia qué lado cae para animarlo
+  if (t.overturned && !(prev && prev.overturned)) {
+    const pr = Math.abs(t.pitch ?? 0) / LIMITS.tipPitch, rr = Math.abs(t.roll ?? 0) / LIMITS.tipRoll;
+    tip.axis = pr > rr ? "pitch" : "roll";
+    tip.sign = Math.sign(tip.axis === "pitch" ? t.pitch : t.roll) || 1;
+    setPilot("overturned");
+  }
+
+  addTrailPoint(t.x, t.y);
+  updateHud(t);
+}
+
 /* ================================================================== */
 /*  HUD                                                                */
 /* ================================================================== */
-const $ = id => document.getElementById(id);
 function updateHud(t) {
-  $("t-x").textContent = `${t.x.toFixed(2)} m`;
-  $("t-y").textContent = `${t.y.toFixed(2)} m`;
+  $("t-xy").textContent = `${t.x.toFixed(1)} / ${t.y.toFixed(1)} m`;
   $("t-heading").textContent = `${t.heading.toFixed(0)}°`;
   $("t-speed").textContent = `${t.speed.toFixed(2)} m/s`;
   $("t-odo").textContent = `${t.odometer.toFixed(2)} m`;
   $("t-z").textContent = `${(t.z ?? 0).toFixed(2)} m`;
   $("t-tilt").textContent = `${(t.pitch ?? 0).toFixed(0)}° / ${(t.roll ?? 0).toFixed(0)}°`;
   $("t-battery").textContent = `${t.battery.toFixed(0)}%`;
-  const fill = $("battery-fill");
-  fill.style.width = `${t.battery}%`;
-  fill.style.background = t.battery > 30 ? "var(--ok)" : "var(--warn)";
+  $("r-battery").textContent = `🔋 ${t.battery.toFixed(0)}%`;
+  for (const id of ["battery-fill", "battery-fill-2"]) {
+    const fill = $(id);
+    fill.style.width = `${t.battery}%`;
+    fill.style.background = t.battery > 30 ? "var(--ok)" : "var(--bad)";
+  }
   const ob = $("t-obstacle");
-  const KIND = { rock: "roca", slope: "pendiente", edge: "borde" };
-  if (t.obstacle_ahead) {
+  ob.classList.remove("warn", "alert");
+  if (t.overturned) {
+    ob.textContent = "VOLCADO"; ob.classList.add("alert");
+  } else if (t.obstacle_ahead) {
     const kind = KIND[t.obstacle_type] ? `${KIND[t.obstacle_type]} ` : "";
     ob.textContent = t.obstacle_distance != null ? `⚠ ${kind}${t.obstacle_distance.toFixed(1)} m` : "⚠ cerca";
-    ob.classList.add("alert");
+    ob.classList.add(t.obstacle_type === "slope" ? "warn" : "alert");
   } else {
     ob.textContent = t.blocked ? `bloqueado${KIND[t.blocked_by] ? ` (${KIND[t.blocked_by]})` : ""}` : "libre";
-    ob.classList.toggle("alert", t.blocked);
+    if (t.blocked) ob.classList.add("alert");
+  }
+  updateNextWaypointInfo();
+}
+
+let bannerTimer = null;
+function showBanner(html, kind, ms = 0) {
+  const b = $("banner");
+  b.innerHTML = html;
+  b.className = `show ${kind}`;
+  clearTimeout(bannerTimer);
+  if (ms) bannerTimer = setTimeout(hideBanner, ms);
+  const r = b.querySelector("[data-reset]");
+  if (r) r.addEventListener("click", resetRover);
+}
+function hideBanner() { $("banner").className = ""; }
+
+/* ================================================================== */
+/*  Misión: waypoints, ruta pegada al terreno y rastro recorrido       */
+/* ================================================================== */
+const waypoints = [];                    // [{ x, y }] en coordenadas del backend
+const overlay = new THREE.Group();       // Todo lo de la misión (capa OVERLAY_LAYER)
+scene.add(overlay);
+const markerGroup = new THREE.Group();
+overlay.add(markerGroup);
+let routeLine = null, trailLine = null;
+let routeSegments = [];                  // [{ from, to, length, worst }] para panel y minimapa
+const trail = [];                        // [{ x, y }] recorrido real
+const lineMaterials = [];
+
+// Clasificación de riesgo de un punto de la ruta (para el color del tramo)
+const RISK = { ok: 0, slope: 1, rock: 2, tip: 3 };
+const RISK_COLOR = [0x7ee787, 0xffa94d, 0xff5a4d, 0xff2d78];
+const RISK_LABEL = ["libre", "pendiente", "roca", "vuelco"];
+const RISK_CLASS = ["seg-ok", "seg-slope", "seg-rock", "seg-tip"];
+
+function riskAt(x, y, headingDeg) {
+  const a = attitudeAt(x, y, headingDeg);
+  if (Math.abs(a.pitch) > LIMITS.tipPitch || Math.abs(a.roll) > LIMITS.tipRoll) return RISK.tip;
+  for (const r of rocks) {
+    if (Math.abs(r.x - x) < 5 && Math.abs(r.y - y) < 5 &&
+        Math.hypot(r.x - x, r.y - y) < r.radius + LIMITS.roverRadius) return RISK.rock;
+  }
+  if (slopeAt(x, y) > LIMITS.maxSlope) return RISK.slope;
+  return RISK.ok;
+}
+
+function setOverlay(obj) { obj.traverse(o => o.layers.set(OVERLAY_LAYER)); return obj; }
+
+function makeLineMaterial(width, opts = {}) {
+  const m = new LineMaterial({ linewidth: width, vertexColors: true, transparent: true, ...opts });
+  m.resolution.set(innerWidth, innerHeight);
+  lineMaterials.push(m);
+  return m;
+}
+const routeMat = makeLineMaterial(4);
+const trailMat = makeLineMaterial(3, { opacity: 0.9 });
+
+function makeLabel(text, color) {
+  const c = document.createElement("canvas");
+  c.width = 128; c.height = 64;
+  const g = c.getContext("2d");
+  g.fillStyle = "rgba(20,12,8,.8)";
+  g.beginPath(); g.roundRect(4, 8, 120, 48, 12); g.fill();
+  g.strokeStyle = color; g.lineWidth = 4; g.stroke();
+  g.fillStyle = "#fff"; g.font = "bold 30px Segoe UI, sans-serif";
+  g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillText(text, 64, 33);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false }));
+  s.scale.set(3.2, 1.6, 1);
+  s.renderOrder = 20;
+  return s;
+}
+
+function rebuildMarkers() {
+  for (const m of [...markerGroup.children]) {
+    m.traverse(o => { o.geometry?.dispose(); o.material?.map?.dispose(); o.material?.dispose(); });
+    markerGroup.remove(m);
+  }
+  waypoints.forEach((w, i) => {
+    const last = i === waypoints.length - 1;
+    const done = pilot.idx > i && pilot.status !== "idle";
+    const color = done ? "#8a8a8a" : last ? "#ff6b57" : "#ffd166";
+    const g = new THREE.Group();
+    const h = heightAt(w.x, w.y);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 3), new THREE.MeshBasicMaterial({ color }));
+    pole.position.y = 1.5;
+    const ring = new THREE.Mesh(new THREE.RingGeometry(WP_REACHED - 0.15, WP_REACHED, 32),
+      new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, transparent: true, opacity: 0.8, depthTest: false }));
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.12;
+    ring.renderOrder = 11;
+    const label = makeLabel(last ? "B" : `${i + 1}`, color);
+    label.position.y = 3.9;
+    g.add(pole, ring, label);
+    g.position.set(w.x, h, -w.y);
+    markerGroup.add(setOverlay(g));
+  });
+}
+
+// Puntos de la ruta pendiente: rover -> waypoint actual -> ... -> B
+function pendingRoute() {
+  const from = lastTelemetry ? { x: lastTelemetry.x, y: lastTelemetry.y } : { x: 0, y: 0 };
+  const start = pilot.status === "idle" ? 0 : pilot.idx;
+  return [from, ...waypoints.slice(start)];
+}
+
+function rebuildRoute() {
+  if (routeLine) { overlay.remove(routeLine); routeLine.geometry.dispose(); routeLine = null; }
+  routeSegments = [];
+  const pts = pendingRoute();
+  if (pts.length < 2) { updateMissionPanel(); return; }
+
+  const pos = [], col = [];
+  const c = new THREE.Color();
+  for (let s = 0; s < pts.length - 1; s++) {
+    const a = pts[s], b = pts[s + 1];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    const heading = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+    const n = Math.max(1, Math.ceil(len / 0.5));
+    let worst = 0;
+    for (let k = s === 0 ? 0 : 1; k <= n; k++) {
+      const x = a.x + (b.x - a.x) * k / n, y = a.y + (b.y - a.y) * k / n;
+      const risk = riskAt(x, y, heading);
+      worst = Math.max(worst, risk);
+      c.setHex(RISK_COLOR[risk]);
+      pos.push(x, heightAt(x, y) + 0.25, -y);
+      col.push(c.r, c.g, c.b);
+    }
+    routeSegments.push({ from: a, to: b, length: len, worst });
+  }
+  const geo = new LineGeometry();
+  geo.setPositions(pos);
+  geo.setColors(col);
+  routeLine = new Line2(geo, routeMat);
+  routeLine.computeLineDistances();
+  routeLine.renderOrder = 12;
+  overlay.add(setOverlay(routeLine));
+  updateMissionPanel();
+}
+
+function rebuildTrail() {
+  if (trailLine) { overlay.remove(trailLine); trailLine.geometry.dispose(); trailLine = null; }
+  if (trail.length < 2) return;
+  const pos = [], col = [];
+  const c = new THREE.Color(0x5fd0ff);
+  for (const p of trail) { pos.push(p.x, heightAt(p.x, p.y) + 0.18, -p.y); col.push(c.r, c.g, c.b); }
+  const geo = new LineGeometry();
+  geo.setPositions(pos);
+  geo.setColors(col);
+  trailLine = new Line2(geo, trailMat);
+  trailLine.renderOrder = 11;
+  overlay.add(setOverlay(trailLine));
+}
+
+let lastRouteFrom = null;
+function addTrailPoint(x, y) {
+  const last = trail[trail.length - 1];
+  if (last && Math.hypot(x - last.x, y - last.y) < 0.5) return;
+  trail.push({ x, y });
+  if (trail.length > 4000) trail.shift();
+  rebuildTrail();
+  // El primer tramo (rover -> waypoint) se recalcula a medida que avanza
+  if (waypoints.length && (!lastRouteFrom || Math.hypot(x - lastRouteFrom.x, y - lastRouteFrom.y) > 1)) {
+    lastRouteFrom = { x, y };
+    rebuildRoute();
   }
 }
 
-// Botones del D-pad
-document.querySelectorAll("[data-action]").forEach(b =>
-  b.addEventListener("click", () => sendCommand(b.dataset.action, b.dataset.value ?? 0)));
-$("btn-reset").addEventListener("click", () => fetch(`${API}/api/reset`, { method: "POST" }));
-$("btn-cam").addEventListener("click", toggleCamera);
-
-function toggleCamera() {
-  camMode = camMode === "chase" ? "hazcam" : "chase";
-  $("btn-cam").textContent = camMode === "chase" ? "📷 Ver HazCam" : "🛰 Vista externa";
-  $("hazcam-panel").style.display = camMode === "chase" ? "" : "none";
+function addWaypoint(x, y) {
+  const h = terrain ? terrain.half - LIMITS.roverRadius - 0.5 : 100;
+  x = THREE.MathUtils.clamp(x, -h, h);
+  y = THREE.MathUtils.clamp(y, -h, h);
+  if (pilot.status === "done") { pilot.idx = 0; setPilot("idle"); waypoints.length = 0; }
+  waypoints.push({ x: +x.toFixed(2), y: +y.toFixed(2) });
+  rebuildMarkers();
+  rebuildRoute();
 }
 
-// Teclado: WASD / flechas / espacio / C
+function undoWaypoint() {
+  if (waypoints.length <= (pilot.status === "idle" ? 0 : pilot.idx)) return;
+  waypoints.pop();
+  if (pilot.idx >= waypoints.length && pilot.status !== "idle") setPilot("done");
+  rebuildMarkers();
+  rebuildRoute();
+}
+
+function clearRoute() {
+  waypoints.length = 0;
+  pilot.idx = 0;
+  if (pilot.status !== "overturned") setPilot("idle");
+  rebuildMarkers();
+  rebuildRoute();
+}
+
+function updateMissionPanel() {
+  const list = $("wp-list");
+  list.innerHTML = "";
+  const start = pilot.status === "idle" ? 0 : pilot.idx;
+  let prev = { x: 0, y: 0 };
+  waypoints.forEach((w, i) => {
+    const li = document.createElement("li");
+    const last = i === waypoints.length - 1;
+    const seg = i >= start ? routeSegments[i - start] : null;
+    const len = seg ? seg.length : Math.hypot(w.x - prev.x, w.y - prev.y);
+    const risk = seg ? `<span class="${RISK_CLASS[seg.worst]}">● ${RISK_LABEL[seg.worst]}</span>` : `<span>✓</span>`;
+    li.innerHTML = `<span>${last ? "B" : i + 1} (${w.x.toFixed(0)}, ${w.y.toFixed(0)})</span><span>${len.toFixed(1)} m ${risk}</span>`;
+    if (i < start) li.classList.add("done");
+    if (i === pilot.idx && pilot.status !== "idle" && pilot.status !== "done") li.classList.add("current");
+    list.appendChild(li);
+    prev = w;
+  });
+
+  const sum = $("route-summary");
+  if (!waypoints.length) {
+    sum.textContent = "Sin ruta. Pulsa “Trazar ruta” y haz clic en el terreno.";
+  } else {
+    const total = routeSegments.reduce((a, s) => a + s.length, 0);
+    const bad = routeSegments.filter(s => s.worst >= RISK.rock).length;
+    const warn = routeSegments.filter(s => s.worst === RISK.slope).length;
+    sum.innerHTML = `Por recorrer: <b>${total.toFixed(1)} m</b>` +
+      (bad ? ` · <span class="seg-rock">${bad} tramo(s) con roca o vuelco</span>` : "") +
+      (warn ? ` · <span class="seg-slope">${warn} con pendiente</span>` : "") +
+      (!bad && !warn ? ` · <span class="seg-ok">ruta despejada</span>` : "");
+  }
+  updateButtons();
+  updateNextWaypointInfo();
+}
+
+function updateNextWaypointInfo() {
+  const idx = pilot.status === "idle" ? 0 : pilot.idx;
+  const t = lastTelemetry, w = waypoints[idx];
+  const name = idx === waypoints.length - 1 ? "B" : idx + 1;
+  $("r-next").textContent = t && w ? `→ ${name}: ${Math.hypot(w.x - t.x, w.y - t.y).toFixed(1)} m` : "—";
+}
+
+/* ================================================================== */
+/*  Piloto básico (placeholder de la IA): va en línea recta de         */
+/*  waypoint en waypoint y se detiene si algo lo bloquea               */
+/* ================================================================== */
+const pilot = { status: "idle", idx: 0, reason: "", busy: false };
+const STATUS_UI = {
+  idle:       ["planificando", ""],
+  running:    ["en ruta", ""],
+  paused:     ["en pausa", "warn"],
+  blocked:    ["bloqueado", "alert"],
+  done:       ["completada", ""],
+  overturned: ["ROVER VOLCADO", "alert"],
+};
+
+function setPilot(status, reason = "") {
+  const was = pilot.status;
+  pilot.status = status;
+  pilot.reason = reason;
+  const [label, cls] = STATUS_UI[status];
+  const text = reason ? `${label}: ${reason}` : label;
+  for (const id of ["m-status", "r-status"]) {
+    const el = $(id);
+    el.textContent = text;
+    el.className = `badge ${cls}`;
+  }
+  if (status === "overturned") {
+    showBanner(`💥 ROVER VOLCADO — misión fallida <button data-reset>↺ Reiniciar</button>`, "bad");
+  } else if (status === "done" && was === "running") {
+    showBanner("🏁 Destino B alcanzado", "good", 4000);
+  } else if (status === "blocked") {
+    showBanner(`⛔ Rover bloqueado (${reason}). Ajusta la ruta y pulsa Iniciar.`, "warn", 5000);
+  } else if (status !== "overturned" && was === "overturned") {
+    hideBanner();
+  }
+  rebuildMarkers();
+  updateMissionPanel();
+}
+
+function updateButtons() {
+  const s = pilot.status;
+  $("btn-start").disabled = !waypoints.length || s === "running" || s === "overturned" ||
+    (s === "done" && pilot.idx >= waypoints.length);
+  $("btn-pause").disabled = s !== "running";
+  $("btn-undo").disabled = !waypoints.length || s === "running";
+  $("btn-clear").disabled = !waypoints.length;
+}
+
+function startPilot() {
+  if (!waypoints.length || pilot.status === "running" || pilot.status === "overturned") return;
+  if (pilot.status === "idle" || pilot.status === "done") pilot.idx = 0;
+  hideBanner();
+  setPilot("running");
+  rebuildRoute();
+  pilotLoop();
+}
+
+function pausePilot() {
+  if (pilot.status === "running") setPilot("paused");
+}
+
+async function pilotLoop() {
+  if (pilot.status !== "running" || pilot.busy) return;
+  pilot.busy = true;
+  try {
+    const t = lastTelemetry;
+    if (!t) return;
+    if (t.overturned) return setPilot("overturned");
+    const wp = waypoints[pilot.idx];
+    if (!wp) return setPilot("done");
+
+    const dx = wp.x - t.x, dy = wp.y - t.y, dist = Math.hypot(dx, dy);
+    if (dist < WP_REACHED) {
+      pilot.idx++;
+      if (pilot.idx >= waypoints.length) return setPilot("done");
+      rebuildMarkers();
+      rebuildRoute();
+      return;
+    }
+    // Rumbo en la convención del backend: 0° = +X, antihorario
+    const err = shortestDelta(t.heading, Math.atan2(dy, dx) * 180 / Math.PI);
+    const res = Math.abs(err) > HEADING_TOL
+      ? await sendCommand(err > 0 ? "turn_left" : "turn_right", Math.min(Math.abs(err), 15))
+      : await sendCommand("forward", Math.min(dist, 0.5));
+
+    if (pilot.status !== "running") return;          // Pausado mientras esperaba
+    if (!res) return setPilot("blocked", "sin conexión");
+    if (res.status === "overturned" || res.telemetry?.overturned) return setPilot("overturned");
+    if (res.status === "battery_empty") return setPilot("blocked", "batería agotada");
+    if (res.blocked) return setPilot("blocked", KIND[res.telemetry?.blocked_by] ?? "obstáculo");
+  } finally {
+    pilot.busy = false;
+    if (pilot.status === "running") setTimeout(pilotLoop, PILOT_MS);
+  }
+}
+
+async function resetRover() {
+  await fetch(`${API}/api/reset`, { method: "POST" }).catch(() => {});
+  await pollTelemetry();
+}
+
+function onRoverReset() {
+  trail.length = 0;
+  rebuildTrail();
+  tip.amount = 0;
+  pilot.idx = 0;
+  setPilot("idle");
+  hideBanner();
+  rebuildRoute();
+}
+
+// API para depurar desde la consola o para que en clase la reemplace la IA
+window.mission = {
+  get ready() { return ready; },
+  get waypoints() { return waypoints.map(w => ({ ...w })); },
+  get status() { return { ...pilot, busy: undefined }; },
+  add: (x, y) => addWaypoint(x, y),
+  start: startPilot,
+  pause: pausePilot,
+  clear: clearRoute,
+  reset: resetRover,
+  view: m => setMode(m),
+};
+
+/* ================================================================== */
+/*  Minimapa (vista rover)                                             */
+/* ================================================================== */
+const mini = $("minimap");
+const miniCtx = mini.getContext("2d");
+let miniRelief = null;      // Canvas con el relieve sombreado (1 px = 1 celda)
+let miniSpan = 200;         // Metros que abarca el minimapa (200 = mapa completo)
+
+function buildMiniRelief() {
+  if (!terrain) return;
+  const { cells, data, slope, res } = terrain;
+  const row = cells + 1;
+  miniRelief = document.createElement("canvas");
+  miniRelief.width = miniRelief.height = row;
+  const g = miniRelief.getContext("2d");
+  const img = g.createImageData(row, row);
+  const L = new THREE.Vector3(-1, 1, 1.3).normalize();   // Luz desde el noroeste
+  const n = new THREE.Vector3();
+  const at = (i, j) => data[Math.min(Math.max(j, 0), cells) * row + Math.min(Math.max(i, 0), cells)];
+  for (let j = 0; j <= cells; j++) {
+    for (let i = 0; i <= cells; i++) {
+      const k = j * row + i;
+      n.set(-(at(i + 1, j) - at(i - 1, j)) / (2 * res), -(at(i, j + 1) - at(i, j - 1)) / (2 * res), 1).normalize();
+      const shade = THREE.MathUtils.clamp(0.45 + 0.75 * n.dot(L), 0.25, 1.25) * (0.95 + data[k] * 0.02);
+      let r = 176 * shade, gr = 82 * shade, b = 45 * shade;
+      if (slope[k] > LIMITS.tipRoll) { r = r * 0.3 + 255 * 0.7; gr = gr * 0.3 + 40 * 0.7; b = b * 0.3 + 70 * 0.7; }
+      else if (slope[k] > LIMITS.maxSlope) { r = r * 0.45 + 255 * 0.55; gr = gr * 0.45 + 150 * 0.55; b = b * 0.45 + 40 * 0.55; }
+      const p = ((cells - j) * row + i) * 4;              // Norte (+Y) arriba
+      img.data[p] = r; img.data[p + 1] = gr; img.data[p + 2] = b; img.data[p + 3] = 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+}
+
+// Transformación mapa <-> minimapa
+function miniView() {
+  const W = mini.width;
+  const c = miniSpan >= 200 || !lastTelemetry ? { x: 0, y: 0 } : { x: smooth.x, y: smooth.y };
+  const k = W / miniSpan;
+  return {
+    k, c,
+    toPx: (x, y) => [(x - c.x) * k + W / 2, W / 2 - (y - c.y) * k],
+    toWorld: (px, py) => ({ x: (px - W / 2) / k + c.x, y: (W / 2 - py) / k + c.y }),
+  };
+}
+
+function drawMinimap() {
+  const W = mini.width, g = miniCtx;
+  const v = miniView();
+  g.fillStyle = "#1a0d08";
+  g.fillRect(0, 0, W, W);
+  if (miniRelief && terrain) {
+    const half = terrain.half;
+    const [x0, y0] = v.toPx(-half, half);
+    g.drawImage(miniRelief, x0, y0, 2 * half * v.k, 2 * half * v.k);
+  }
+  // Rocas
+  g.fillStyle = "rgba(40, 22, 16, .9)";
+  for (const r of rocks) {
+    const [px, py] = v.toPx(r.x, r.y);
+    if (px < -10 || py < -10 || px > W + 10 || py > W + 10) continue;
+    g.beginPath(); g.arc(px, py, Math.max(1.5, r.radius * v.k), 0, Math.PI * 2); g.fill();
+  }
+  // Rastro recorrido
+  if (trail.length > 1) {
+    g.strokeStyle = "#5fd0ff"; g.lineWidth = 2.5; g.beginPath();
+    trail.forEach((p, i) => { const [px, py] = v.toPx(p.x, p.y); i ? g.lineTo(px, py) : g.moveTo(px, py); });
+    if (lastTelemetry) g.lineTo(...v.toPx(smooth.x, smooth.y));
+    g.stroke();
+  }
+  // Ruta pendiente, coloreada por el peor riesgo de cada tramo
+  g.lineWidth = 3;
+  g.setLineDash([8, 5]);
+  for (const s of routeSegments) {
+    g.strokeStyle = `#${RISK_COLOR[s.worst].toString(16).padStart(6, "0")}`;
+    g.beginPath(); g.moveTo(...v.toPx(s.from.x, s.from.y)); g.lineTo(...v.toPx(s.to.x, s.to.y)); g.stroke();
+  }
+  g.setLineDash([]);
+  // Waypoints
+  g.font = "bold 18px Segoe UI, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle";
+  waypoints.forEach((w, i) => {
+    const [px, py] = v.toPx(w.x, w.y);
+    const last = i === waypoints.length - 1;
+    const done = pilot.idx > i && pilot.status !== "idle";
+    g.fillStyle = done ? "#8a8a8a" : last ? "#ff6b57" : "#ffd166";
+    g.beginPath(); g.arc(px, py, 11, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "#2a1408"; g.fillText(last ? "B" : `${i + 1}`, px, py + 1);
+  });
+  // Rover (flecha orientada)
+  if (lastTelemetry) {
+    const [px, py] = v.toPx(smooth.x, smooth.y);
+    const a = -THREE.MathUtils.degToRad(smooth.heading);
+    g.save(); g.translate(px, py); g.rotate(a);
+    g.fillStyle = lastTelemetry.overturned ? "#ff2d78" : "#5fd0ff";
+    g.strokeStyle = "#08131a"; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(14, 0); g.lineTo(-9, 9); g.lineTo(-4, 0); g.lineTo(-9, -9); g.closePath();
+    g.fill(); g.stroke();
+    g.restore();
+  }
+  // Norte
+  g.fillStyle = "rgba(255,255,255,.8)"; g.font = "bold 16px Segoe UI, sans-serif";
+  g.fillText("N ▲", W - 26, 16);
+}
+
+mini.addEventListener("click", e => {
+  const r = mini.getBoundingClientRect();
+  const w = miniView().toWorld((e.clientX - r.left) * mini.width / r.width, (e.clientY - r.top) * mini.height / r.height);
+  addWaypoint(w.x, w.y);
+});
+$("btn-zoom").addEventListener("click", () => {
+  miniSpan = miniSpan >= 200 ? 60 : 200;
+  $("btn-zoom").textContent = `🔍 ${miniSpan} m`;
+});
+
+/* ================================================================== */
+/*  Globo de Marte (intro en órbita)                                   */
+/* ================================================================== */
+const GLOBE_R = 10;
+const LANDING = { lat: 18.4, lon: 77.5 };            // Zona de exploración (≈ cráter Jezero)
+const globeScene = new THREE.Scene();
+globeScene.background = new THREE.Color(0x020104);
+const globeCam = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 2000);
+const globeHome = new THREE.Vector3(0, 6, 34);
+globeCam.position.copy(globeHome);
+globeCam.lookAt(0, 0, 0);
+const globe = new THREE.Mesh(new THREE.SphereGeometry(GLOBE_R, 96, 64),
+  new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 }));
+globe.rotation.order = "ZYX";                        // Gira sobre su eje y luego se inclina
+globe.rotation.z = THREE.MathUtils.degToRad(25);     // Inclinación del eje de Marte
+globeScene.add(globe);
+let globeSpin = true;
+let landingMarker = null;
+
+// Punto de la esfera para (u, v) igual que SphereGeometry
+function spherePoint(u, v, r) {
+  const phi = u * Math.PI * 2, theta = v * Math.PI;
+  return new THREE.Vector3(-r * Math.cos(phi) * Math.sin(theta), r * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta));
+}
+const latLonToPoint = (lat, lon, r) => spherePoint((lon + 180) / 360, (90 - lat) / 180, r);
+
+// Ruido 3D de valor: se muestrea sobre la esfera para que la textura no tenga costura
+function hash3(x, y, z) {
+  let h = (x * 374761393 + y * 668265263 + z * 1274126177) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1103515245);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+function noise3(x, y, z) {
+  const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
+  const fx = x - ix, fy = y - iy, fz = z - iz;
+  const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy), sz = fz * fz * (3 - 2 * fz);
+  const l = (a, b, t) => a + (b - a) * t;
+  const c = (dx, dy, dz) => hash3(ix + dx, iy + dy, iz + dz);
+  return l(l(l(c(0, 0, 0), c(1, 0, 0), sx), l(c(0, 1, 0), c(1, 1, 0), sx), sy),
+           l(l(c(0, 0, 1), c(1, 0, 1), sx), l(c(0, 1, 1), c(1, 1, 1), sx), sy), sz);
+}
+function fbm3(x, y, z, oct) {
+  let s = 0, a = 0.5, f = 1;
+  for (let o = 0; o < oct; o++) { s += a * noise3(x * f, y * f, z * f); a *= 0.5; f *= 2.03; }
+  return s;
+}
+
+// Textura del planeta: se genera por filas en varios frames para no congelar la página
+async function paintGlobeTexture() {
+  const W = 1024, H = 512;
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const g = c.getContext("2d");
+  const img = g.createImageData(W, H);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  const light = [214, 128, 78], mid = [176, 88, 50], dark = [96, 52, 38], ice = [240, 236, 230];
+  const col = [0, 0, 0];
+  const mix = (a, b, t) => { for (let i = 0; i < 3; i++) col[i] = a[i] + (b[i] - a[i]) * t; };
+  for (let y = 0; y < H; y++) {
+    const theta = y / H * Math.PI, lat = 90 - y / H * 180;
+    const st = Math.sin(theta), ct = Math.cos(theta);
+    for (let x = 0; x < W; x++) {
+      const phi = x / W * Math.PI * 2;                   // Mismo punto que spherePoint(u, v, 1)
+      const px = -Math.cos(phi) * st, py = ct, pz = Math.sin(phi) * st;
+      const n = fbm3(px * 2.2 + 5, py * 2.2, pz * 2.2, 5);           // Regiones claras/oscuras
+      const d = fbm3(px * 9 + 11, py * 9, pz * 9, 3);                // Detalle
+      if (n > 0.52) mix(mid, dark, Math.min((n - 0.52) * 5, 1));
+      else mix(light, mid, Math.max(0, (n - 0.35) * 5.8));
+      const shade = 0.85 + d * 0.3;
+      const cap = Math.abs(lat) - 72 - (d - 0.5) * 8;                  // Casquetes polares
+      const k = (y * W + x) * 4;
+      for (let i = 0; i < 3; i++) {
+        const v = col[i] * shade;
+        img.data[k + i] = cap > 0 ? v + (ice[i] - v) * Math.min(cap / 4, 1) : v;
+      }
+      img.data[k + 3] = 255;
+    }
+    if (y % 16 === 15) await new Promise(r => setTimeout(r, 0));   // Ceder el hilo
+  }
+  g.putImageData(img, 0, 0);
+  globe.material.map = tex;
+  globe.material.color.set(0xffffff);
+  globe.material.needsUpdate = true;
+}
+
+function buildGlobe() {
+  globe.material.color.set(0xb4643a);                     // Color liso mientras se pinta la textura
+  paintGlobeTexture();
+
+  // Halo atmosférico: más intenso junto al borde del planeta y se desvanece hacia afuera
+  const ATMO = 1.07;
+  const atmo = new THREE.Mesh(new THREE.SphereGeometry(GLOBE_R * ATMO, 64, 48), new THREE.ShaderMaterial({
+    side: THREE.BackSide, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+    uniforms: { edge: { value: Math.sqrt(1 - 1 / (ATMO * ATMO)) } },
+    vertexShader: `varying vec3 vN; varying vec3 vV;
+      void main() { vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz);
+        gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform float edge; varying vec3 vN; varying vec3 vV;
+      void main() { float f = clamp(-dot(vN, vV) / edge, 0.0, 1.0); f = pow(f, 3.0);
+        gl_FragColor = vec4(1.0, 0.5, 0.25, 1.0) * f * 0.9; }`,
+  }));
+  globeScene.add(atmo);
+
+  // Estrellas
+  const starPos = [];
+  for (let i = 0; i < 2500; i++) {
+    const v = new THREE.Vector3().randomDirection().multiplyScalar(600 + Math.random() * 300);
+    starPos.push(v.x, v.y, v.z);
+  }
+  const stars = new THREE.Points(new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute(starPos, 3)),
+    new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false }));
+  globeScene.add(stars);
+
+  // Luz
+  const gSun = new THREE.DirectionalLight(0xfff1e0, 2.4);
+  gSun.position.set(-30, 12, 25);
+  globeScene.add(gSun, new THREE.AmbientLight(0x553322, 0.35));
+
+  // Marcador de la zona de exploración
+  landingMarker = new THREE.Group();
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.4, 40),
+    new THREE.MeshBasicMaterial({ color: 0x5fd0ff, side: THREE.DoubleSide, transparent: true }));
+  const dot = new THREE.Mesh(new THREE.CircleGeometry(0.12, 24), new THREE.MeshBasicMaterial({ color: 0x5fd0ff }));
+  landingMarker.add(ring, dot);
+  const p = latLonToPoint(LANDING.lat, LANDING.lon, GLOBE_R * 1.003);
+  landingMarker.position.copy(p);
+  landingMarker.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), p.clone().normalize());
+  globe.add(landingMarker);
+  // Girar el globo para que la zona quede de frente (algo antes, así "entra" girando)
+  globe.rotation.y = -Math.atan2(p.x, p.z) - 0.4;
+}
+
+/* ================================================================== */
+/*  Modos de vista y transiciones                                      */
+/* ================================================================== */
+const tweens = [];
+function tween(ms, update, done) {
+  return new Promise(res => tweens.push({ t: 0, ms, update, done: () => { done?.(); res(); } }));
+}
+const ease = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+const fadeEl = $("fade");
+const fadeTo = (to, ms = 500) => {
+  const from = +fadeEl.style.opacity || 0;
+  return tween(ms, k => { fadeEl.style.opacity = from + (to - from) * k; });
+};
+
+function setMode(m) {
+  mode = m;
+  document.body.classList.remove("mode-globe", "mode-mission", "mode-rover");
+  document.body.classList.add(`mode-${m}`);
+  document.body.classList.toggle("hazcam-full", m === "rover" && hazFull);
+  controls.enabled = m === "mission";
+  $("btn-view").textContent = m === "rover" ? "🛰 Centro de control" : "🚙 Vista rover";
+  if (m !== "mission") setPicking(false);
+}
+
+let descending = false;
+async function descend() {
+  if (!ready || descending || mode !== "globe") return;
+  descending = true;
+  globeSpin = false;
+  globe.updateMatrixWorld();
+  const mark = landingMarker.getWorldPosition(new THREE.Vector3());
+  const startPos = globeCam.position.clone();
+  const endPos = mark.clone().normalize().multiplyScalar(GLOBE_R * 1.12);
+  const startDir = startPos.clone().normalize(), endDir = endPos.clone().normalize();
+  const r0 = startPos.length(), r1 = endPos.length();
+  const look = new THREE.Vector3();
+  const fade = tween(2600, k => {
+    const e = ease(k);
+    const dir = startDir.clone().lerp(endDir, e).normalize();
+    globeCam.position.copy(dir.multiplyScalar(r0 + (r1 - r0) * e));
+    globeCam.lookAt(look.set(0, 0, 0).lerp(mark, e));
+    if (k > 0.7) fadeEl.style.opacity = (k - 0.7) / 0.3;
+  });
+  await fade;
+  setMode("mission");
+  // Entrada al centro de control: desde muy alto hasta la vista de trabajo
+  const roverPos = rover.position.clone();
+  controls.target.copy(roverPos);
+  const hi = roverPos.clone().add(new THREE.Vector3(0, 230, 40)), lo = roverPos.clone().add(new THREE.Vector3(0, 55, 60));
+  missionCam.position.copy(hi);
+  fadeTo(0, 700);
+  await tween(1800, k => { missionCam.position.lerpVectors(hi, lo, ease(k)); });
+  descending = false;
+}
+
+async function backToOrbit() {
+  await fadeTo(1, 450);
+  setMode("globe");
+  globeCam.position.copy(globeHome);
+  globeCam.lookAt(0, 0, 0);
+  globeSpin = true;
+  await fadeTo(0, 600);
+}
+
+function toggleView() {
+  if (mode === "globe") return;
+  setMode(mode === "mission" ? "rover" : "mission");
+}
+function toggleHazcam() {
+  if (mode === "globe") return;
+  if (mode === "mission") { hazFull = true; setMode("rover"); }
+  else { hazFull = !hazFull; setMode("rover"); }
+  $("btn-cam").textContent = hazFull ? "🚙 Vista externa" : "📷 HazCam";
+}
+
+/* ================================================================== */
+/*  Entrada: botones, teclado y clics sobre el terreno                 */
+/* ================================================================== */
+// Los botones sueltan el foco: si no, Espacio/Enter volverían a pulsarlos
+// (p. ej. "Reiniciar" al usar Espacio para parar)
+document.addEventListener("click", e => e.target.closest("button")?.blur());
+
+document.querySelectorAll("[data-action]").forEach(b =>
+  b.addEventListener("click", () => { pausePilot(); sendCommand(b.dataset.action, b.dataset.value ?? 0); }));
+$("btn-reset").addEventListener("click", resetRover);
+$("btn-descend").addEventListener("click", descend);
+$("btn-orbit").addEventListener("click", backToOrbit);
+$("btn-view").addEventListener("click", toggleView);
+$("btn-cam").addEventListener("click", toggleHazcam);
+$("btn-start").addEventListener("click", startPilot);
+$("btn-pause").addEventListener("click", pausePilot);
+$("btn-undo").addEventListener("click", undoWaypoint);
+$("btn-clear").addEventListener("click", clearRoute);
+$("btn-plan").addEventListener("click", () => setPicking(!picking));
+
+let hazardOn = false;
+$("btn-hazard").addEventListener("click", () => {
+  hazardOn = !hazardOn;
+  $("btn-hazard").classList.toggle("on", hazardOn);
+  setHazardLayer(hazardOn);
+});
+let followRover = true;
+$("btn-follow").addEventListener("click", () => {
+  followRover = !followRover;
+  $("btn-follow").classList.toggle("on", followRover);
+});
+
+let picking = false;
+function setPicking(on) {
+  picking = on;
+  $("btn-plan").classList.toggle("on", on);
+  document.body.classList.toggle("picking", on);
+}
+
+// Clic (sin arrastrar) en modo "Trazar ruta" -> waypoint en el terreno
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+let downAt = null;
+canvas.addEventListener("pointerdown", e => { downAt = [e.clientX, e.clientY]; });
+canvas.addEventListener("pointerup", e => {
+  if (!downAt) return;
+  const moved = Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]);
+  downAt = null;
+  if (moved > 5 || e.button !== 0) return;               // Fue un arrastre de cámara
+  if (mode === "globe") return clickGlobe(e);
+  if (mode !== "mission" || !picking || !terrainMesh) return;
+  pointer.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(pointer, missionCam);
+  const hit = raycaster.intersectObject(terrainMesh)[0];
+  if (hit) addWaypoint(hit.point.x, -hit.point.z);
+});
+
+// Clic sobre el marcador del globo = descender
+function clickGlobe(e) {
+  pointer.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(pointer, globeCam);
+  const hit = raycaster.intersectObject(globe, false)[0];
+  if (hit && landingMarker && hit.point.distanceTo(landingMarker.getWorldPosition(new THREE.Vector3())) < 1.5) descend();
+}
+
+// Teclado: WASD / flechas / espacio / C / Tab
 const KEYS = {
   KeyW: ["forward", 0.5], ArrowUp: ["forward", 0.5],
   KeyS: ["backward", 0.5], ArrowDown: ["backward", 0.5],
@@ -529,8 +1478,11 @@ const KEYS = {
 };
 const held = new Set();
 addEventListener("keydown", e => {
-  if (e.code === "KeyC") return toggleCamera();
-  if (KEYS[e.code]) { e.preventDefault(); held.add(e.code); }
+  if (mode === "globe") { if (e.code === "Enter" || e.code === "Space") descend(); return; }
+  if (e.code === "Tab") { e.preventDefault(); return toggleView(); }
+  if (e.code === "KeyC") return toggleHazcam();
+  if (e.code === "Escape") return setPicking(false);
+  if (KEYS[e.code]) { e.preventDefault(); held.add(e.code); pausePilot(); }
 });
 addEventListener("keyup", e => held.delete(e.code));
 // Mientras se mantiene una tecla, se envían comandos pequeños de forma continua
@@ -542,28 +1494,60 @@ setInterval(() => { for (const k of held) sendCommand(...KEYS[k]); }, 120);
 const clock = new THREE.Clock();
 const camTarget = new THREE.Vector3();
 const camPos = new THREE.Vector3();
+const prevRoverPos = new THREE.Vector3();
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
 function setHazAspect(aspect) {
   if (hazCam.aspect !== aspect) { hazCam.aspect = aspect; hazCam.updateProjectionMatrix(); }
 }
 
+function setFog([near, far]) { scene.fog.near = near; scene.fog.far = far; }
+
 function renderHazCam() {
   setHazAspect(HAZ_W / HAZ_H);
+  setFog(FOG.ground);
   renderer.setRenderTarget(hazTarget);
   renderer.render(scene, hazCam);
   renderer.readRenderTargetPixels(hazTarget, 0, 0, HAZ_W, HAZ_H, hazPixels);
   renderer.setRenderTarget(null);
-  // WebGL entrega las filas de abajo hacia arriba: invertimos verticalmente
+  // WebGL entrega las filas de abajo hacia arriba: invertimos verticalmente.
+  // El render target queda en espacio lineal: se pasa a sRGB para que la
+  // imagen (y la que recibe la IA) se vea igual que en pantalla.
   const out = hazImage.data, row = HAZ_W * 4;
   for (let y = 0; y < HAZ_H; y++) {
-    out.set(hazPixels.subarray((HAZ_H - 1 - y) * row, (HAZ_H - y) * row), y * row);
+    const src = (HAZ_H - 1 - y) * row, dst = y * row;
+    for (let i = 0; i < row; i += 4) {
+      out[dst + i] = TO_SRGB[hazPixels[src + i]];
+      out[dst + i + 1] = TO_SRGB[hazPixels[src + i + 1]];
+      out[dst + i + 2] = TO_SRGB[hazPixels[src + i + 2]];
+      out[dst + i + 3] = 255;
+    }
   }
   hazCtx.putImageData(hazImage, 0, 0);
 }
+const TO_SRGB = Uint8Array.from({ length: 256 }, (_, v) => {
+  const c = v / 255;
+  return Math.round(255 * (c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055));
+});
 
+let miniTimer = 0;
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.1);
+
+  for (let i = tweens.length - 1; i >= 0; i--) {
+    const tw = tweens[i];
+    tw.t = Math.min(tw.t + dt * 1000, tw.ms);
+    tw.update(tw.t / tw.ms);
+    if (tw.t >= tw.ms) { tweens.splice(i, 1); tw.done(); }
+  }
+
+  if (mode === "globe") {
+    if (globeSpin) globe.rotation.y += dt * 0.06;
+    if (landingMarker) landingMarker.children[0].scale.setScalar(1 + 0.35 * Math.sin(clock.elapsedTime * 4));
+    renderer.render(globeScene, globeCam);
+    return;
+  }
 
   // Interpolación suave hacia el estado del backend
   const k = 1 - Math.pow(0.001, dt);                  // ~ suavizado exponencial
@@ -574,61 +1558,108 @@ function animate() {
 
   // backend (x, y, heading) -> three (x, z, -y). Altura, cabeceo y alabeo se
   // calculan aquí sobre la posición interpolada (misma fórmula que
-  // Rover.attitude en server.py) para que el rover se apoye suavemente.
+  // Rover._attitude_at en server.py) para que el rover se apoye suavemente.
   const att = attitudeAt(smooth.x, smooth.y, smooth.heading);
-  rover.position.set(smooth.x, att.z, -smooth.y);
-  rover.rotation.set(att.roll, THREE.MathUtils.degToRad(smooth.heading), att.pitch, "YZX");
+  let pitch = THREE.MathUtils.degToRad(att.pitch), roll = THREE.MathUtils.degToRad(att.roll);
+  // Vuelco: el rover cae hacia el lado que superó el límite
+  tip.amount += ((lastTelemetry?.overturned ? 1 : 0) - tip.amount) * (1 - Math.pow(0.08, dt));
+  if (tip.axis === "roll") roll += (tip.sign * 1.9 - roll) * tip.amount;
+  else pitch += (tip.sign * 1.35 - pitch) * tip.amount;
+  prevRoverPos.copy(rover.position);
+  rover.position.set(smooth.x, att.z + tip.amount * 0.45, -smooth.y);
+  rover.rotation.set(roll, THREE.MathUtils.degToRad(smooth.heading), pitch, "YZX");
 
   // Giro de ruedas proporcional a la distancia recorrida (radio 0.32 m)
   const dist = Math.hypot(smooth.x - prevX, smooth.y - prevY);
-  const forwardDir = new THREE.Vector2(Math.cos(rover.rotation.y), Math.sin(rover.rotation.y));
-  const sign = Math.sign(forwardDir.dot(new THREE.Vector2(smooth.x - prevX, smooth.y - prevY))) || 1;
+  const hr = THREE.MathUtils.degToRad(smooth.heading);
+  const sign = Math.sign(Math.cos(hr) * (smooth.x - prevX) + Math.sin(hr) * (smooth.y - prevY)) || 1;
   for (const w of wheels) w.rotation.z -= sign * dist / 0.32;
 
   // Cámara de seguimiento: detrás y arriba del rover, en su marco local
-  camTarget.set(-8, 4.5, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), rover.rotation.y).add(rover.position);
+  camTarget.set(-8, 4.5, 0).applyAxisAngle(Y_AXIS, hr).add(rover.position);
   // Que la cámara no atraviese una colina detrás del rover
   camTarget.y = Math.max(camTarget.y, heightAt(camTarget.x, -camTarget.z) + 2);
   camPos.copy(chaseCam.position).lerp(camTarget, 1 - Math.pow(0.02, dt));
   chaseCam.position.copy(camPos);
   chaseCam.lookAt(rover.position.x, rover.position.y + 1.2, rover.position.z);
 
-  // Sol (y su caja de sombras) centrado en el rover
-  sun.target.position.copy(rover.position);
-  sun.position.copy(rover.position).add(SUN_OFFSET);
+  // Centro de control: la órbita acompaña al rover si "Seguir rover" está activo
+  if (mode === "mission") {
+    if (followRover && !descending) {
+      const d = rover.position.clone().sub(prevRoverPos);
+      controls.target.add(d);
+      missionCam.position.add(d);
+    }
+    controls.update();
+  }
+
+  // Sol y caja de sombras: centrados en el rover (±45 m) o en toda la zona desde el control
+  if (mode === "mission") {
+    setShadowBox(115);
+    sun.target.position.set(0, 0, 0);
+    sun.position.copy(SUN_OFFSET).multiplyScalar(3);
+  } else {
+    setShadowBox(45);
+    sun.target.position.copy(rover.position);
+    sun.position.copy(rover.position).add(SUN_OFFSET);
+  }
 
   // HazCam a baja resolución para la miniatura (PiP)
   renderHazCam();
 
-  // Vista principal
-  if (camMode === "chase") {
-    renderer.render(scene, chaseCam);
-  } else {
+  // Vista principal. Desde el centro de control la ruta se dibuja siempre
+  // encima del relieve; a ras de suelo respeta la profundidad (no tapa al rover).
+  const overTerrain = mode === "mission";
+  routeMat.depthTest = trailMat.depthTest = !overTerrain;
+  if (mode === "mission") {
+    setFog(FOG.mission);
+    renderer.render(scene, missionCam);
+  } else if (hazFull) {
     setHazAspect(innerWidth / innerHeight);
     renderer.render(scene, hazCam);
+  } else {
+    renderer.render(scene, chaseCam);
   }
+
+  if (mode === "rover" && (miniTimer -= dt) <= 0) { miniTimer = 1 / 20; drawMinimap(); }
 }
 
 addEventListener("resize", () => {
   renderer.setSize(innerWidth, innerHeight);
-  chaseCam.aspect = innerWidth / innerHeight;
-  chaseCam.updateProjectionMatrix();
+  for (const cam of [chaseCam, missionCam, globeCam]) { cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); }
+  for (const m of lineMaterials) m.resolution.set(innerWidth, innerHeight);
 });
 
 /* ================================================================== */
 /*  Arranque                                                           */
 /* ================================================================== */
+let ready = false;          // Terreno construido: ya se puede descender
 async function init() {
+  // El globo se muestra de inmediato; el terreno se construye mientras tanto
+  $("btn-descend").disabled = true;
+  $("btn-descend").textContent = "Cargando zona…";
+  buildGlobe();
+  animate();
+  await new Promise(r => setTimeout(r, 0));
+
   let world = { terrain_size: 60, rocks: [] };
   try { world = await (await fetch(`${API}/api/world`)).json(); }
   catch { connEl.textContent = "● no se pudo cargar /api/world"; connEl.classList.add("off"); }
+  LIMITS.roverRadius = world.rover_radius ?? LIMITS.roverRadius;
+  LIMITS.maxSlope = world.max_slope_deg ?? LIMITS.maxSlope;
+  LIMITS.tipPitch = world.tip_pitch_deg ?? LIMITS.tipPitch;
+  LIMITS.tipRoll = world.tip_roll_deg ?? LIMITS.tipRoll;
 
   buildGround(world);
   buildRocks(world.rocks);
   buildRover();
+  buildMiniRelief();
 
   await pollTelemetry();
   smooth.x = target.x; smooth.y = target.y; smooth.heading = target.heading;
+  rover.position.set(smooth.x, heightAt(smooth.x, smooth.y), -smooth.y);
+  if (lastTelemetry?.overturned) { tip.amount = 1; }
+  setPilot(lastTelemetry?.overturned ? "overturned" : pilot.status);   // Refresca el panel
   setInterval(pollTelemetry, POLL_MS);
 
   // Subida periódica del frame HazCam al backend. Va en un setInterval
@@ -636,7 +1667,17 @@ async function init() {
   // esté en segundo plano y requestAnimationFrame quede pausado.
   setInterval(() => { renderHazCam(); pushFrame(); }, FRAME_PUSH_MS);
 
-  animate();
+  ready = true;
+  $("btn-descend").disabled = false;
+  $("btn-descend").textContent = "▼ Descender a la zona";
+
+  // #mision salta la intro (útil en clase y para pruebas)
+  if (location.hash === "#mision") {
+    setMode("mission");
+    const p = new THREE.Vector3(smooth.x, heightAt(smooth.x, smooth.y), -smooth.y);
+    controls.target.copy(p);
+    missionCam.position.copy(p).add(new THREE.Vector3(0, 55, 60));
+  }
 }
 init();
 </script>

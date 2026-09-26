@@ -10,3 +10,6 @@ presentaciones/
 
 # Notas de handoff entre sesiones (privadas, no van al repo publico)
 .handoff/
+
+# Estado efimero del hook de handoff (marca el inicio de cada sesion)
+.claude/.session_start_marker
