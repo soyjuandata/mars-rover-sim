@@ -76,6 +76,8 @@
     <tr><td>Posición Y</td><td id="t-y">0.00 m</td></tr>
     <tr><td>Rumbo</td><td id="t-heading">0°</td></tr>
     <tr><td>Velocidad</td><td id="t-speed">0.00 m/s</td></tr>
+    <tr><td>Altitud</td><td id="t-z">0.00 m</td></tr>
+    <tr><td>Cabeceo / alabeo</td><td id="t-tilt">0° / 0°</td></tr>
     <tr><td>Odómetro</td><td id="t-odo">0.00 m</td></tr>
     <tr><td>Obstáculo</td><td><span id="t-obstacle" class="badge">libre</span></td></tr>
   </table>
@@ -136,7 +138,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 const SKY = 0xd9a066;                          // Cielo marciano (butterscotch)
 scene.background = new THREE.Color(SKY);
-scene.fog = new THREE.Fog(SKY, 18, 80);        // Niebla atmosférica sutil
+scene.fog = new THREE.Fog(SKY, 25, 150);       // Niebla atmosférica (mapa de 200 m)
 
 // Cámara de seguimiento en tercera persona
 const chaseCam = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 300);
@@ -158,13 +160,18 @@ const hazImage = hazCtx.createImageData(HAZ_W, HAZ_H);
 /*  Iluminación                                                        */
 /* ================================================================== */
 scene.add(new THREE.HemisphereLight(0xffd6b0, 0x6b2f16, 0.8));
+// El sol sigue al rover: la caja de sombras (±45 m) no cubre un mapa de 200 m
+const SUN_OFFSET = new THREE.Vector3(30, 40, 20);
 const sun = new THREE.DirectionalLight(0xffe0c0, 1.6);
-sun.position.set(30, 40, 20);
+sun.position.copy(SUN_OFFSET);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.camera.left = sun.shadow.camera.bottom = -45;
 sun.shadow.camera.right = sun.shadow.camera.top = 45;
-scene.add(sun);
+sun.shadow.camera.far = 150;
+sun.shadow.bias = -0.0005;
+sun.shadow.normalBias = 0.05;
+scene.add(sun, sun.target);
 
 /* ================================================================== */
 /*  Terreno: plano con textura procedural rojiza                       */
@@ -188,13 +195,92 @@ function makeGroundTexture() {
   return tex;
 }
 
-function buildGround(size) {
+// Mapa de alturas del backend (null = terreno plano)
+let terrain = null;   // { half, res, cells, data: Float32Array }
+
+// Altura del terreno en coordenadas del backend (x, y). Réplica exacta de
+// World.height_at en server.py: misma malla y misma diagonal de triángulos,
+// así el rover dibujado coincide con el que simula la física.
+function heightAt(x, y) {
+  if (!terrain) return 0;
+  const { half, res, cells, data } = terrain;
+  const gx = Math.min(Math.max((x + half) / res, 0), cells - 1e-6);
+  const gy = Math.min(Math.max((y + half) / res, 0), cells - 1e-6);
+  const i = Math.floor(gx), j = Math.floor(gy);
+  const fx = gx - i, fy = gy - j, row = cells + 1;
+  const h00 = data[j * row + i],       h10 = data[j * row + i + 1];
+  const h01 = data[(j + 1) * row + i], h11 = data[(j + 1) * row + i + 1];
+  if (fx >= fy) return h00 + (h10 - h00) * fx + (h11 - h10) * fy;
+  return h00 + (h01 - h00) * fy + (h11 - h01) * fx;
+}
+
+// Malla del relieve: vértice (i, j) = backend (x, y) -> three (x, h, -y).
+// Cada celda se parte por la diagonal (i, j)-(i+1, j+1), igual que el backend.
+function buildTerrainGeometry(size) {
+  const { half, res, cells, data } = terrain;
+  const row = cells + 1;
+  const pos = new Float32Array(row * row * 3);
+  const uv = new Float32Array(row * row * 2);
+  const col = new Float32Array(row * row * 3);
+  const dust = new THREE.Color(1.0, 0.94, 0.86);      // Polvo claro en llanos y crestas
+  const bedrock = new THREE.Color(0.58, 0.46, 0.42);  // Roca expuesta en pendientes
+  const c = new THREE.Color();
+  const at = (i, j) => data[Math.min(Math.max(j, 0), cells) * row + Math.min(Math.max(i, 0), cells)];
+
+  for (let j = 0; j <= cells; j++) {
+    for (let i = 0; i <= cells; i++) {
+      const k = j * row + i;
+      const x = -half + i * res, y = -half + j * res, h = data[k];
+      pos.set([x, h, -y], k * 3);
+      uv.set([x / 8, y / 8], k * 2);                   // Textura en metros (1 repetición / 8 m)
+      // Color según pendiente (roca oscura) y altura (fondos de cráter más oscuros)
+      const gx = (at(i + 1, j) - at(i - 1, j)) / (2 * res);
+      const gy = (at(i, j + 1) - at(i, j - 1)) / (2 * res);
+      const slope = Math.atan(Math.hypot(gx, gy)) * 180 / Math.PI;
+      c.copy(dust).lerp(bedrock, Math.min(slope / 28, 1));
+      c.multiplyScalar(THREE.MathUtils.clamp(0.92 + h * 0.03, 0.72, 1.05));
+      col.set([c.r, c.g, c.b], k * 3);
+    }
+  }
+
+  const idx = new Uint32Array(cells * cells * 6);
+  let n = 0;
+  for (let j = 0; j < cells; j++) {
+    for (let i = 0; i < cells; i++) {
+      const a = j * row + i, b = a + 1, d = a + row, e = d + 1;   // 00, 10, 01, 11
+      idx.set([a, b, e, a, e, d], n);
+      n += 6;
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+  geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function buildGround(world) {
+  const size = world.terrain_size;
+  const hm = world.heightmap;
+  if (hm && hm.data && hm.data.length === hm.size * hm.size) {
+    terrain = { half: size / 2, res: hm.resolution, cells: hm.size - 1, data: Float32Array.from(hm.data) };
+  }
+
   const tex = makeGroundTexture();
-  tex.repeat.set(size / 8, size / 8);
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(size, size),
-    new THREE.MeshStandardMaterial({ map: tex, roughness: 1, metalness: 0 }));
-  ground.rotation.x = -Math.PI / 2;
+  let ground;
+  if (terrain) {
+    ground = new THREE.Mesh(buildTerrainGeometry(size),
+      new THREE.MeshStandardMaterial({ map: tex, vertexColors: true, roughness: 1, metalness: 0 }));
+  } else {
+    // Servidor sin mapa de alturas: plano como antes
+    tex.repeat.set(size / 8, size / 8);
+    ground = new THREE.Mesh(new THREE.PlaneGeometry(size, size),
+      new THREE.MeshStandardMaterial({ map: tex, roughness: 1, metalness: 0 }));
+    ground.rotation.x = -Math.PI / 2;
+  }
   ground.receiveShadow = true;
   scene.add(ground);
 
@@ -237,7 +323,8 @@ function buildRocks(rocks) {
     geo.computeVertexNormals();
     const mesh = new THREE.Mesh(geo, mat);
     mesh.scale.y = r.height / r.radius;
-    mesh.position.set(r.x, r.height * 0.35, -r.y);       // backend Y -> three -Z
+    const base = r.z ?? heightAt(r.x, r.y);               // Apoyada sobre el relieve
+    mesh.position.set(r.x, base + r.height * 0.35, -r.y); // backend Y -> three -Z
     mesh.rotation.y = Math.random() * Math.PI * 2;
     mesh.castShadow = mesh.receiveShadow = true;
     scene.add(mesh);
@@ -329,6 +416,22 @@ const smooth = { x: 0, y: 0, heading: 90 };           // Valor interpolado en pa
 let camMode = "chase";                                 // "chase" | "hazcam"
 let lastTelemetry = null;
 
+// Altura y orientación (radianes) del rover según el terreno bajo sus ruedas.
+// pitch > 0 = morro arriba; roll > 0 = lado izquierdo más alto.
+const WHEELBASE = 2.2, TRACK_WIDTH = 1.8;              // Igual que server.py
+function attitudeAt(x, y, headingDeg) {
+  const rad = THREE.MathUtils.degToRad(headingDeg);
+  const fx = Math.cos(rad), fy = Math.sin(rad), lx = -fy, ly = fx;
+  const hw = WHEELBASE / 2, ht = TRACK_WIDTH / 2;
+  const front = heightAt(x + fx * hw, y + fy * hw), back = heightAt(x - fx * hw, y - fy * hw);
+  const left = heightAt(x + lx * ht, y + ly * ht), right = heightAt(x - lx * ht, y - ly * ht);
+  return {
+    z: (front + back + left + right) / 4,
+    pitch: Math.atan2(front - back, WHEELBASE),
+    roll: Math.atan2(left - right, TRACK_WIDTH),
+  };
+}
+
 // Diferencia angular más corta (grados) para interpolar rumbos sin dar vueltas
 function shortestDelta(a, b) {
   let d = (b - a) % 360;
@@ -386,16 +489,20 @@ function updateHud(t) {
   $("t-heading").textContent = `${t.heading.toFixed(0)}°`;
   $("t-speed").textContent = `${t.speed.toFixed(2)} m/s`;
   $("t-odo").textContent = `${t.odometer.toFixed(2)} m`;
+  $("t-z").textContent = `${(t.z ?? 0).toFixed(2)} m`;
+  $("t-tilt").textContent = `${(t.pitch ?? 0).toFixed(0)}° / ${(t.roll ?? 0).toFixed(0)}°`;
   $("t-battery").textContent = `${t.battery.toFixed(0)}%`;
   const fill = $("battery-fill");
   fill.style.width = `${t.battery}%`;
   fill.style.background = t.battery > 30 ? "var(--ok)" : "var(--warn)";
   const ob = $("t-obstacle");
+  const KIND = { rock: "roca", slope: "pendiente", edge: "borde" };
   if (t.obstacle_ahead) {
-    ob.textContent = t.obstacle_distance != null ? `⚠ ${t.obstacle_distance.toFixed(1)} m` : "⚠ cerca";
+    const kind = KIND[t.obstacle_type] ? `${KIND[t.obstacle_type]} ` : "";
+    ob.textContent = t.obstacle_distance != null ? `⚠ ${kind}${t.obstacle_distance.toFixed(1)} m` : "⚠ cerca";
     ob.classList.add("alert");
   } else {
-    ob.textContent = t.blocked ? "bloqueado" : "libre";
+    ob.textContent = t.blocked ? `bloqueado${KIND[t.blocked_by] ? ` (${KIND[t.blocked_by]})` : ""}` : "libre";
     ob.classList.toggle("alert", t.blocked);
   }
 }
@@ -465,9 +572,12 @@ function animate() {
   smooth.y += (target.y - smooth.y) * k;
   smooth.heading += shortestDelta(smooth.heading, target.heading) * k;
 
-  // backend (x, y, heading) -> three (x, 0, -y), rotación sobre Y
-  rover.position.set(smooth.x, 0, -smooth.y);
-  rover.rotation.y = THREE.MathUtils.degToRad(smooth.heading);
+  // backend (x, y, heading) -> three (x, z, -y). Altura, cabeceo y alabeo se
+  // calculan aquí sobre la posición interpolada (misma fórmula que
+  // Rover.attitude en server.py) para que el rover se apoye suavemente.
+  const att = attitudeAt(smooth.x, smooth.y, smooth.heading);
+  rover.position.set(smooth.x, att.z, -smooth.y);
+  rover.rotation.set(att.roll, THREE.MathUtils.degToRad(smooth.heading), att.pitch, "YZX");
 
   // Giro de ruedas proporcional a la distancia recorrida (radio 0.32 m)
   const dist = Math.hypot(smooth.x - prevX, smooth.y - prevY);
@@ -477,9 +587,15 @@ function animate() {
 
   // Cámara de seguimiento: detrás y arriba del rover, en su marco local
   camTarget.set(-8, 4.5, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), rover.rotation.y).add(rover.position);
+  // Que la cámara no atraviese una colina detrás del rover
+  camTarget.y = Math.max(camTarget.y, heightAt(camTarget.x, -camTarget.z) + 2);
   camPos.copy(chaseCam.position).lerp(camTarget, 1 - Math.pow(0.02, dt));
   chaseCam.position.copy(camPos);
-  chaseCam.lookAt(rover.position.x, 1.2, rover.position.z);
+  chaseCam.lookAt(rover.position.x, rover.position.y + 1.2, rover.position.z);
+
+  // Sol (y su caja de sombras) centrado en el rover
+  sun.target.position.copy(rover.position);
+  sun.position.copy(rover.position).add(SUN_OFFSET);
 
   // HazCam a baja resolución para la miniatura (PiP)
   renderHazCam();
@@ -507,7 +623,7 @@ async function init() {
   try { world = await (await fetch(`${API}/api/world`)).json(); }
   catch { connEl.textContent = "● no se pudo cargar /api/world"; connEl.classList.add("off"); }
 
-  buildGround(world.terrain_size);
+  buildGround(world);
   buildRocks(world.rocks);
   buildRover();
 
