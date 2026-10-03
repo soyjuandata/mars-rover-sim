@@ -9,7 +9,9 @@ hazcam.png
 presentaciones/
 
 # Notas de handoff entre sesiones (privadas, no van al repo publico)
-.handoff/
+.handoff/*
+!.handoff/presentaciones
+!.handoff/*.ipynb
 
 # Estado efimero del hook de handoff (marca el inicio de cada sesion)
 .claude/.session_start_marker

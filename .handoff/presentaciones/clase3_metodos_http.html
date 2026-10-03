@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clase 3 — Métodos HTTP</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-2: #1c2129;
+    --border: #2a3038;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --accent: #58a6ff;
+    --get: #3fb950;
+    --post: #d29922;
+    --put: #58a6ff;
+    --delete: #f85149;
+    --patch: #bc8cff;
+    --mono: 'Consolas', 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    line-height: 1.6;
+  }
+  header {
+    padding: 2.5rem 1.5rem 1.5rem;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { margin: 0 0 0.4rem; font-size: 1.8rem; }
+  header p { margin: 0; color: var(--text-dim); }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+  section { margin-bottom: 3rem; }
+  h2 {
+    font-size: 1.3rem;
+    border-left: 4px solid var(--accent);
+    padding-left: 0.6rem;
+    margin-bottom: 1rem;
+  }
+  .intro-box {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.2rem 1.4rem;
+  }
+  .methods-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin-bottom: 1.5rem;
+  }
+  .method-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+    cursor: pointer;
+    transition: border-color 0.15s, transform 0.1s;
+  }
+  .method-card:hover { transform: translateY(-2px); }
+  .method-card.active { border-color: var(--card-color, var(--accent)); }
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-weight: bold;
+    font-size: 0.85rem;
+    padding: 3px 10px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+  }
+  .badge-GET { background: rgba(63,185,80,0.15); color: var(--get); }
+  .badge-POST { background: rgba(210,153,34,0.15); color: var(--post); }
+  .badge-PUT { background: rgba(88,166,255,0.15); color: var(--put); }
+  .badge-DELETE { background: rgba(248,81,73,0.15); color: var(--delete); }
+  .badge-PATCH { background: rgba(188,140,255,0.15); color: var(--patch); }
+  .method-card p { margin: 0; font-size: 0.85rem; color: var(--text-dim); }
+
+  .detail-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.4rem;
+    display: none;
+  }
+  .detail-panel.visible { display: block; }
+  .detail-panel h3 { margin-top: 0; }
+  .idempotent-tag {
+    display: inline-block;
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 5px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+  .tag-yes { background: rgba(63,185,80,0.15); color: var(--get); }
+  .tag-no { background: rgba(248,81,73,0.15); color: var(--delete); }
+
+  pre {
+    background: #010409;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.9rem 1rem;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    margin: 0.6rem 0;
+  }
+  code { font-family: var(--mono); background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+  .example-box {
+    background: var(--panel-2);
+    border-left: 3px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 8px 8px 0;
+    margin-top: 0.8rem;
+    font-size: 0.9rem;
+  }
+  .example-box strong { color: var(--accent); }
+
+  /* Playground */
+  .playground {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.4rem;
+  }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 0.8rem; align-items: center; }
+  select, input[type=text], textarea, button {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+  }
+  select { min-width: 100px; }
+  input[type=text] { flex: 1; min-width: 180px; }
+  textarea { width: 100%; min-height: 90px; resize: vertical; }
+  button {
+    background: var(--accent);
+    color: #0d1117;
+    font-weight: bold;
+    cursor: pointer;
+    border: none;
+    padding: 8px 18px;
+  }
+  button:hover { opacity: 0.85; }
+  button.secondary {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    font-weight: normal;
+  }
+  .quick-links { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 0.8rem; }
+  .quick-links span {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 3px 10px;
+    cursor: pointer;
+  }
+  .quick-links span:hover { border-color: var(--accent); color: var(--accent); }
+  .status-line {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    margin-bottom: 0.4rem;
+  }
+  .status-ok { color: var(--get); }
+  .status-err { color: var(--delete); }
+  .status-pending { color: var(--text-dim); }
+  .hint { font-size: 0.8rem; color: var(--text-dim); margin-top: 0.5rem; }
+  .store-view {
+    margin-top: 1rem;
+    border-top: 1px solid var(--border);
+    padding-top: 1rem;
+  }
+  .store-view h4 { margin: 0 0 8px; font-size: 0.85rem; color: var(--text-dim); font-weight: normal; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--text-dim); font-weight: normal; }
+
+  /* Quiz */
+  .quiz-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.2rem 1.4rem;
+    margin-bottom: 1rem;
+  }
+  .quiz-card p.question { font-weight: bold; margin-top: 0; }
+  .options { display: flex; flex-direction: column; gap: 6px; }
+  .option-btn {
+    text-align: left;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.9rem;
+  }
+  .option-btn:hover { border-color: var(--accent); }
+  .option-btn.correct { border-color: var(--get); background: rgba(63,185,80,0.12); }
+  .option-btn.wrong { border-color: var(--delete); background: rgba(248,81,73,0.12); }
+  .feedback { margin-top: 8px; font-size: 0.85rem; }
+  .feedback.correct-text { color: var(--get); }
+  .feedback.wrong-text { color: var(--delete); }
+
+  footer {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    padding: 2rem 1rem;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Métodos HTTP</h1>
+  <p>Clase 3 — el vocabulario básico de cualquier API REST</p>
+</header>
+
+<div class="wrap">
+
+  <section>
+    <div class="intro-box">
+      <p style="margin:0">
+        Cuando un cliente (un navegador, un script, una app) habla con un
+        servidor por HTTP, cada pedido incluye un <strong>método</strong>: un
+        verbo que dice <em>qué tipo de acción</em> se quiere hacer sobre un
+        <strong>recurso</strong> — algo identificado por una URL, como
+        <code>/libros</code> o <code>/libros/3</code>. Explorá cada método
+        abajo y después probalos en vivo contra una mini API simulada de
+        libros, corriendo enteramente en esta página.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Los métodos</h2>
+    <div class="methods-grid" id="methods-grid"></div>
+    <div class="detail-panel" id="detail-panel"></div>
+  </section>
+
+  <section>
+    <h2>Probalo en vivo</h2>
+    <div class="playground">
+      <p class="hint" style="margin-top:0">
+        Esto no llama a ningún servidor real: es una API de libros simulada en
+        JavaScript, en memoria, para que veas los efectos de cada método sin
+        depender de nada externo. Los cambios son reales dentro de la página —
+        probá mandar el mismo POST dos veces, o un DELETE dos veces, y mirá
+        qué pasa con la tabla de abajo.
+      </p>
+      <div class="quick-links" id="quick-links"></div>
+      <div class="row">
+        <select id="method-select">
+          <option>GET</option>
+          <option>POST</option>
+          <option>PUT</option>
+          <option>DELETE</option>
+          <option>PATCH</option>
+        </select>
+        <input type="text" id="url-input" value="/libros">
+        <button id="send-btn">Enviar</button>
+        <button id="reset-btn" class="secondary">Reiniciar datos</button>
+      </div>
+      <textarea id="body-input" placeholder='Body JSON, ej: {"titulo": "Dune", "autor": "Frank Herbert"}' style="display:none"></textarea>
+      <div id="response-box">
+        <div class="status-line status-pending" id="status-line">Sin enviar todavía.</div>
+        <pre id="response-body" style="display:none"></pre>
+      </div>
+      <div class="store-view">
+        <h4>Estado actual de /libros</h4>
+        <table id="store-table">
+          <thead><tr><th>id</th><th>titulo</th><th>autor</th><th>disponible</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Repaso rápido</h2>
+    <div id="quiz-container"></div>
+  </section>
+
+</div>
+
+<footer>Curso de IA y robótica — clase 3</footer>
+
+<script>
+const METHODS = [
+  {
+    name: "GET",
+    color: "var(--get)",
+    tagline: "Pedir datos, sin cambiar nada",
+    idempotent: true,
+    body: false,
+    explanation: "GET le pide al servidor un recurso o una lista de recursos. No debería tener efectos secundarios: pedir la lista de libros 100 veces no crea ni borra ningún libro. Por eso los navegadores lo precargan y los proxies lo cachean sin miedo.",
+    example: {
+      label: "GET /libros",
+      desc: "Devuelve la lista completa de libros. GET /libros/3 devolvería solo el libro con id 3.",
+      curl: "curl https://api.ejemplo.com/libros",
+      response: '[\n  { "id": 1, "titulo": "Fahrenheit 451", "autor": "Ray Bradbury" },\n  { "id": 2, "titulo": "Dune", "autor": "Frank Herbert" }\n]'
+    }
+  },
+  {
+    name: "POST",
+    color: "var(--post)",
+    tagline: "Crear un recurso nuevo",
+    idempotent: false,
+    body: true,
+    explanation: "POST le dice al servidor 'creá algo nuevo con estos datos'. No es idempotente: mandar el mismo POST dos veces normalmente crea dos recursos distintos (dos libros, no uno) — porque cada vez el servidor asigna un id nuevo.",
+    example: {
+      label: "POST /libros",
+      desc: "Crea un libro nuevo. Mandar el mismo body dos veces crea dos libros con ids distintos.",
+      curl: 'curl -X POST https://api.ejemplo.com/libros \\\n  -H "Content-Type: application/json" \\\n  -d \'{"titulo": "Dune", "autor": "Frank Herbert"}\'',
+      response: '{\n  "id": 3,\n  "titulo": "Dune",\n  "autor": "Frank Herbert"\n}'
+    }
+  },
+  {
+    name: "PUT",
+    color: "var(--put)",
+    tagline: "Reemplazar por completo un recurso",
+    idempotent: true,
+    body: true,
+    explanation: "PUT reemplaza el recurso entero por lo que mandás en el body — si te olvidás un campo, ese campo se pierde. Es idempotente: hacerlo una vez o cien veces con el mismo body deja el recurso exactamente igual.",
+    example: {
+      label: "PUT /libros/2",
+      desc: "Reemplaza todos los campos del libro 2. Si no mandás 'autor', el libro se queda sin autor.",
+      curl: 'curl -X PUT https://api.ejemplo.com/libros/2 \\\n  -H "Content-Type: application/json" \\\n  -d \'{"titulo": "Dune", "autor": "Frank Herbert"}\'',
+      response: '{\n  "id": 2,\n  "titulo": "Dune",\n  "autor": "Frank Herbert"\n}'
+    }
+  },
+  {
+    name: "PATCH",
+    color: "var(--patch)",
+    tagline: "Modificar parcialmente un recurso",
+    idempotent: false,
+    body: true,
+    explanation: "PATCH cambia solo los campos que mandás, dejando el resto intacto — a diferencia de PUT, que reemplaza todo. Puede ser idempotente o no según qué pidas: 'disponible = false' sí lo es; 'copias += 1' no.",
+    example: {
+      label: "PATCH /libros/2",
+      desc: "Cambia solo el campo 'disponible' del libro 2, sin tocar título ni autor.",
+      curl: 'curl -X PATCH https://api.ejemplo.com/libros/2 \\\n  -H "Content-Type: application/json" \\\n  -d \'{"disponible": false}\'',
+      response: '{\n  "id": 2,\n  "titulo": "Dune",\n  "autor": "Frank Herbert",\n  "disponible": false\n}'
+    }
+  },
+  {
+    name: "DELETE",
+    color: "var(--delete)",
+    tagline: "Eliminar un recurso",
+    idempotent: true,
+    body: false,
+    explanation: "DELETE elimina el recurso indicado. Es idempotente en el resultado: borrarlo una vez o dos deja el mundo en el mismo estado ('ya no existe'), aunque la segunda llamada suele responder 404 en vez de 200.",
+    example: {
+      label: "DELETE /libros/2",
+      desc: "Borra el libro 2. Repetir el mismo DELETE después ya no encuentra nada que borrar.",
+      curl: "curl -X DELETE https://api.ejemplo.com/libros/2",
+      response: '{\n  "id": 2,\n  "eliminado": true\n}'
+    }
+  }
+];
+
+const QUIZ = [
+  {
+    q: "Querés ver la lista completa de libros sin modificar nada. ¿Qué método usás?",
+    options: ["GET /libros", "POST /libros", "DELETE /libros"],
+    correct: 0,
+    why: "GET no tiene efectos secundarios — es exactamente para leer datos sin cambiar nada."
+  },
+  {
+    q: "Mandás el mismo POST /libros (mismo body) tres veces seguidas. ¿Qué pasa?",
+    options: [
+      "Se crea un libro, los pedidos repetidos se ignoran",
+      "Se crean tres libros distintos, uno por cada POST",
+      "El servidor devuelve error porque no se puede repetir un POST"
+    ],
+    correct: 1,
+    why: "POST no es idempotente: cada llamada crea un recurso nuevo con su propio id, por eso tres POST crean tres libros."
+  },
+  {
+    q: "¿Cuál es la diferencia clave entre PUT y PATCH?",
+    options: [
+      "PUT es para leer, PATCH es para escribir",
+      "PUT reemplaza el recurso entero, PATCH modifica solo una parte",
+      "No hay diferencia, son sinónimos en HTTP"
+    ],
+    correct: 1,
+    why: "PUT manda el recurso completo y lo reemplaza (los campos que falten se pierden); PATCH manda solo los campos que cambian."
+  },
+  {
+    q: "Borrás /libros/2 con DELETE y después mandás el mismo DELETE otra vez. ¿Qué es más probable que pase?",
+    options: [
+      "La segunda vez devuelve 404, porque el libro ya no existe",
+      "La segunda vez borra otro libro al azar",
+      "La segunda vez crea el libro de nuevo"
+    ],
+    correct: 0,
+    why: "DELETE es idempotente en el resultado final (el recurso queda eliminado), pero eso no significa que devuelva siempre el mismo código: la segunda vez ya no hay nada que borrar, así que típicamente responde 404."
+  }
+];
+
+function renderMethods() {
+  const grid = document.getElementById('methods-grid');
+  const panel = document.getElementById('detail-panel');
+
+  METHODS.forEach((m, i) => {
+    const card = document.createElement('div');
+    card.className = 'method-card';
+    card.style.setProperty('--card-color', m.color);
+    card.innerHTML = `
+      <span class="badge badge-${m.name}">${m.name}</span>
+      <p>${m.tagline}</p>
+    `;
+    card.addEventListener('click', () => selectMethod(i));
+    grid.appendChild(card);
+  });
+
+  function selectMethod(i) {
+    document.querySelectorAll('.method-card').forEach((c, idx) => {
+      c.classList.toggle('active', idx === i);
+    });
+    const m = METHODS[i];
+    panel.classList.add('visible');
+    panel.innerHTML = `
+      <h3>
+        <span class="badge badge-${m.name}">${m.name}</span>
+        <span class="idempotent-tag ${m.idempotent ? 'tag-yes' : 'tag-no'}">
+          ${m.idempotent ? 'Idempotente' : 'No idempotente'}
+        </span>
+      </h3>
+      <p>${m.explanation}</p>
+      <div class="example-box">
+        <strong>${m.example.label}</strong>
+        <p style="margin:6px 0">${m.example.desc}</p>
+        <pre>${escapeHtml(m.example.curl)}</pre>
+        <p style="margin:6px 0 4px; color:var(--text-dim); font-size:0.8rem">Respuesta de ejemplo:</p>
+        <pre>${escapeHtml(m.example.response)}</pre>
+      </div>
+    `;
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  selectMethod(0);
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+/* --- API simulada en memoria --- */
+let nextId = 3;
+let LIBROS = [];
+
+function seedStore() {
+  nextId = 3;
+  LIBROS = [
+    { id: 1, titulo: "Fahrenheit 451", autor: "Ray Bradbury", disponible: true },
+    { id: 2, titulo: "1984", autor: "George Orwell", disponible: true }
+  ];
+}
+
+function simulateRequest(method, path, bodyRaw) {
+  const parts = path.split('?')[0].split('/').filter(Boolean);
+  if (parts[0] !== 'libros') {
+    return { status: 404, body: { detail: "Recurso no encontrado. Usá /libros o /libros/{id}" } };
+  }
+  const id = parts[1] !== undefined ? parseInt(parts[1], 10) : null;
+  let parsedBody = null;
+  if (bodyRaw) {
+    try { parsedBody = JSON.parse(bodyRaw); }
+    catch (e) { return { status: 400, body: { detail: "Body JSON invalido: " + e.message } }; }
+  }
+
+  if (method === 'GET') {
+    if (id === null) return { status: 200, body: LIBROS };
+    const libro = LIBROS.find(l => l.id === id);
+    return libro ? { status: 200, body: libro } : { status: 404, body: { detail: `Libro ${id} no encontrado` } };
+  }
+
+  if (method === 'POST') {
+    if (id !== null) return { status: 405, body: { detail: "POST se usa sobre la colección /libros, no sobre un id" } };
+    if (!parsedBody || !parsedBody.titulo) return { status: 400, body: { detail: "Falta 'titulo' en el body" } };
+    const nuevo = { id: nextId++, titulo: parsedBody.titulo, autor: parsedBody.autor || null, disponible: true };
+    LIBROS.push(nuevo);
+    return { status: 201, body: nuevo };
+  }
+
+  if (method === 'PUT') {
+    if (id === null) return { status: 405, body: { detail: "PUT necesita un id: /libros/{id}" } };
+    if (!parsedBody || !parsedBody.titulo) return { status: 400, body: { detail: "PUT reemplaza el libro entero: falta 'titulo'" } };
+    const idx = LIBROS.findIndex(l => l.id === id);
+    const reemplazo = { id, titulo: parsedBody.titulo, autor: parsedBody.autor || null, disponible: parsedBody.disponible !== undefined ? parsedBody.disponible : true };
+    if (idx === -1) { LIBROS.push(reemplazo); return { status: 201, body: reemplazo }; }
+    LIBROS[idx] = reemplazo;
+    return { status: 200, body: reemplazo };
+  }
+
+  if (method === 'PATCH') {
+    if (id === null) return { status: 405, body: { detail: "PATCH necesita un id: /libros/{id}" } };
+    const idx = LIBROS.findIndex(l => l.id === id);
+    if (idx === -1) return { status: 404, body: { detail: `Libro ${id} no encontrado` } };
+    LIBROS[idx] = { ...LIBROS[idx], ...(parsedBody || {}) };
+    return { status: 200, body: LIBROS[idx] };
+  }
+
+  if (method === 'DELETE') {
+    if (id === null) return { status: 405, body: { detail: "DELETE necesita un id: /libros/{id}" } };
+    const idx = LIBROS.findIndex(l => l.id === id);
+    if (idx === -1) return { status: 404, body: { detail: `Libro ${id} no encontrado (ya estaba borrado?)` } };
+    LIBROS.splice(idx, 1);
+    return { status: 200, body: { id, eliminado: true } };
+  }
+
+  return { status: 501, body: { detail: "Método no implementado en esta simulación" } };
+}
+
+function renderStoreTable() {
+  const tbody = document.querySelector('#store-table tbody');
+  tbody.innerHTML = LIBROS.map(l => `
+    <tr>
+      <td>${l.id}</td>
+      <td>${escapeHtml(l.titulo)}</td>
+      <td>${escapeHtml(l.autor || '—')}</td>
+      <td>${l.disponible ? 'si' : 'no'}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="4" style="color:var(--text-dim)">Sin libros.</td></tr>';
+}
+
+const QUICK_LINKS = [
+  { label: "GET /libros", method: "GET", url: "/libros", body: "" },
+  { label: "GET /libros/1", method: "GET", url: "/libros/1", body: "" },
+  { label: "POST /libros", method: "POST", url: "/libros", body: '{\n  "titulo": "Dune",\n  "autor": "Frank Herbert"\n}' },
+  { label: "PUT /libros/2", method: "PUT", url: "/libros/2", body: '{\n  "titulo": "1984",\n  "autor": "George Orwell",\n  "disponible": false\n}' },
+  { label: "PATCH /libros/1", method: "PATCH", url: "/libros/1", body: '{\n  "disponible": false\n}' },
+  { label: "DELETE /libros/1", method: "DELETE", url: "/libros/1", body: "" }
+];
+
+function renderQuickLinks() {
+  const container = document.getElementById('quick-links');
+  QUICK_LINKS.forEach(link => {
+    const span = document.createElement('span');
+    span.textContent = link.label;
+    span.addEventListener('click', () => {
+      document.getElementById('method-select').value = link.method;
+      document.getElementById('url-input').value = link.url;
+      document.getElementById('body-input').value = link.body;
+      toggleBodyVisibility();
+    });
+    container.appendChild(span);
+  });
+}
+
+function toggleBodyVisibility() {
+  const method = document.getElementById('method-select').value;
+  const bodyInput = document.getElementById('body-input');
+  bodyInput.style.display = (method === 'GET' || method === 'DELETE') ? 'none' : 'block';
+}
+
+function setupPlayground() {
+  const methodSelect = document.getElementById('method-select');
+  const sendBtn = document.getElementById('send-btn');
+  const resetBtn = document.getElementById('reset-btn');
+  const statusLine = document.getElementById('status-line');
+  const responseBody = document.getElementById('response-body');
+
+  methodSelect.addEventListener('change', toggleBodyVisibility);
+  toggleBodyVisibility();
+
+  sendBtn.addEventListener('click', () => {
+    const method = methodSelect.value;
+    const url = document.getElementById('url-input').value.trim();
+    const bodyRaw = document.getElementById('body-input').value.trim();
+
+    if (!url.startsWith('/')) {
+      statusLine.textContent = 'La ruta tiene que empezar con / (ej: /libros)';
+      statusLine.className = 'status-line status-err';
+      return;
+    }
+
+    const result = simulateRequest(method, url, (method === 'GET' || method === 'DELETE') ? '' : bodyRaw);
+    const ok = result.status >= 200 && result.status < 300;
+
+    statusLine.textContent = method + ' ' + url + ' -> HTTP ' + result.status;
+    statusLine.className = 'status-line ' + (ok ? 'status-ok' : 'status-err');
+    responseBody.textContent = JSON.stringify(result.body, null, 2);
+    responseBody.style.display = 'block';
+    renderStoreTable();
+  });
+
+  resetBtn.addEventListener('click', () => {
+    seedStore();
+    renderStoreTable();
+    statusLine.textContent = 'Datos reiniciados a los dos libros originales.';
+    statusLine.className = 'status-line status-pending';
+    responseBody.style.display = 'none';
+  });
+}
+
+function renderQuiz() {
+  const container = document.getElementById('quiz-container');
+  QUIZ.forEach((item, qi) => {
+    const card = document.createElement('div');
+    card.className = 'quiz-card';
+    const optionsHtml = item.options.map((opt, oi) =>
+      `<button class="option-btn" data-qi="${qi}" data-oi="${oi}">${opt}</button>`
+    ).join('');
+    card.innerHTML = `
+      <p class="question">${qi + 1}. ${item.q}</p>
+      <div class="options">${optionsHtml}</div>
+      <div class="feedback" style="display:none"></div>
+    `;
+    container.appendChild(card);
+  });
+
+  container.addEventListener('click', (e) => {
+    if (!e.target.classList.contains('option-btn')) return;
+    const btn = e.target;
+    if (btn.disabled) return;
+    const qi = parseInt(btn.dataset.qi, 10);
+    const oi = parseInt(btn.dataset.oi, 10);
+    const item = QUIZ[qi];
+    const card = btn.closest('.quiz-card');
+    const allBtns = card.querySelectorAll('.option-btn');
+    const feedback = card.querySelector('.feedback');
+
+    allBtns.forEach(b => { b.disabled = true; });
+    allBtns[item.correct].classList.add('correct');
+
+    if (oi === item.correct) {
+      feedback.textContent = 'Correcto — ' + item.why;
+      feedback.className = 'feedback correct-text';
+    } else {
+      btn.classList.add('wrong');
+      feedback.textContent = 'No — ' + item.why;
+      feedback.className = 'feedback wrong-text';
+    }
+    feedback.style.display = 'block';
+  });
+}
+
+seedStore();
+renderMethods();
+renderQuickLinks();
+setupPlayground();
+renderStoreTable();
+renderQuiz();
+</script>
+
+</body>
+</html>
